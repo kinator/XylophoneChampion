@@ -93,7 +93,7 @@ def analyze_music(
 
     # Tempo
     tempo_arr, _ = librosa.beat.beat_track(y=y, sr=sr)
-    tempo = float(tempo_arr) if hasattr(tempo_arr, '__len__') else float(tempo_arr)
+    tempo = float(tempo_arr[0]) if hasattr(tempo_arr, '__len__') else float(tempo_arr)
 
     # Détection des onsets
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
