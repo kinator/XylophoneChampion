@@ -3,8 +3,8 @@ Constantes générales pour le fonctionnement du jeu
 
 Auteurs: Julien Behani, Enzo Fournier - 2026
 """
-import pygame.key as key
+import pygame
 
-KEY_ACCEPT = key.Y
-KEY_REFUSE = key.H
-KEY_MENU = key.H
+KEY_ACCEPT = pygame.K_f
+KEY_REFUSE = pygame.K_r
+KEY_MENU = pygame.K_r

@@ -22,6 +22,7 @@ from note import (
     NOTE_HEIGHT,
 )
 from analyzer import analyze_music
+from constants import KEY_ACCEPT
 
 # ------------------------------------------------------------------
 # Constantes de mise en page
@@ -45,8 +46,8 @@ _COUNTDOWN   = 3.0
 # quand il reste TIME_VISIBLE secondes avant leur heure de frappe.
 _TIME_VISIBLE = HIT_Y / FALL_SPEED   # ≈ 2.07 s
 
-# Boutons J1 de la borne arcade — rangée basse : F G H | rangée haute : R T
-_LANE_KEYS = [pygame.K_f, pygame.K_g, pygame.K_h, pygame.K_r, pygame.K_t]
+# Boutons J1 de la borne arcade — rangée basse : R T (pistes 0-1) | rangée haute : F G (pistes 2-3)
+_LANE_KEYS = [pygame.K_r, pygame.K_t, pygame.K_f, pygame.K_g]
 
 # ------------------------------------------------------------------
 # Couleurs
@@ -160,7 +161,7 @@ class GameScene:
                         self._press_lane(i)
 
             # Écran de résultat → menu
-            if self._state == 'result' and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+            if self._state == 'result' and event.key == KEY_ACCEPT:
                 return {'action': 'menu'}
 
         if event.type == pygame.KEYUP:
@@ -613,6 +614,6 @@ class GameScene:
             self.screen.blit(val_s, (col_val, y0 + i * row_h))
 
         hint = self._fonts['info'].render(
-            "ENTRÉE  Retour au menu", True, _COL_GRAY
+            "F  Retour au menu", True, _COL_GRAY
         )
         self.screen.blit(hint, (self.width // 2 - hint.get_width() // 2, self.height - 70))

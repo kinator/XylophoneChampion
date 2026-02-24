@@ -163,7 +163,13 @@ class MenuScene:
                 color  = _COLOR_ITEM
                 prefix = "    "
 
-            text = self._fonts['item'].render(prefix + music['name'], True, color)
+            max_text_w = box_w - 36
+            name = music['name']
+            text = self._fonts['item'].render(prefix + name, True, color)
+            if text.get_width() > max_text_w:
+                while name and self._fonts['item'].render(prefix + name + "...", True, color).get_width() > max_text_w:
+                    name = name[:-1]
+                text = self._fonts['item'].render(prefix + name + "...", True, color)
             self.screen.blit(text, (box_x + 18, y + (item_h - 6 - text.get_height()) // 2))
 
     def _draw_empty(self):
