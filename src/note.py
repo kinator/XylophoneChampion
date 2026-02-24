@@ -5,29 +5,30 @@ Auteurs: Julien Behani, Enzo Fournier - 2026
 """
 
 # Nombre de pistes
-NUM_LANES = 5
+NUM_LANES = 4
 
 # Couleurs des pistes, inspirées d'un xylophone (rouge → bleu)
 LANE_COLORS = [
     (230,  60,  60),   # Rouge
     (230, 150,  50),   # Orange
-    (220, 220,  50),   # Jaune
-    ( 60, 190,  70),   # Vert
-    ( 60, 110, 230),   # Bleu
+    (220, 220,  50),   # Vert
+    ( 60, 190,  70),   # Bleu
 ]
 
 # Touches associées à chaque piste — boutons J1 de la borne arcade
-# Rangée basse : F G H (pistes 0-1-2) | Rangée haute : R T (pistes 3-4)
-LANE_KEYS_DISPLAY = ['F', 'G', 'H', 'R', 'T']
+# Rangée basse : R T (pistes 0-1) | Rangée haute : F G (pistes 2-3)
+LANE_KEYS_DISPLAY = ['R', 'T', 'F', 'G']
 
 # Fenêtres de jugement en secondes
 PERFECT_WINDOW = 0.07   # ±70 ms → PERFECT
-GOOD_WINDOW    = 0.15   # ±150 ms → GOOD
+GOOD_WINDOW    = 0.13   # ±150 ms → GOOD
+POOR_WINDOW    = 0.20   # ±150 ms → GOOD
 
 # Points de base par jugement (multipliés ensuite par le combo)
 JUDGMENT_POINTS = {
     'perfect': 100,
     'good':     50,
+    'poor':     15,
     'miss':      0,
 }
 
@@ -104,6 +105,11 @@ class Note:
             self.hit = True
             self.judgment = 'good'
             return 'good'
+        
+        if diff <= POOR_WINDOW:
+            self.hit = True
+            self.judgment = 'poor'
+            return 'poor'
 
         return None
 
@@ -118,7 +124,7 @@ class Note:
             True si la note vient d'être marquée comme ratée.
         """
         if not self.hit and not self.missed:
-            if current_time > self.time + GOOD_WINDOW:
+            if current_time > self.time + POOR_WINDOW:
                 self.missed = True
                 self.judgment = 'miss'
                 return True

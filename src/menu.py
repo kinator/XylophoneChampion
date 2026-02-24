@@ -10,6 +10,7 @@ Auteurs: Julien Behani, Enzo Fournier - 2026
 import os
 import sys
 import pygame
+import constants as const
 
 MUSIC_DIR = "music"
 
@@ -98,14 +99,14 @@ class MenuScene:
             self._selected = min(len(self._music_files) - 1, self._selected + 1)
             self._update_scroll()
 
-        elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+        elif event.key == const.KEY_ACCEPT:
             if self._music_files:
                 return {
                     'action':     'play',
                     'music_path': self._music_files[self._selected]['path'],
                 }
 
-        elif event.key == pygame.K_ESCAPE:
+        elif event.key == const.KEY_REFUSE:
             pygame.quit()
             sys.exit()
 

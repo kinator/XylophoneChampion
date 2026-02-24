@@ -15,8 +15,7 @@ from note import (
     NUM_LANES,
     LANE_COLORS,
     LANE_KEYS_DISPLAY,
-    PERFECT_WINDOW,
-    GOOD_WINDOW,
+    POOR_WINDOW,
     JUDGMENT_POINTS,
     FALL_SPEED,
     HIT_Y,
@@ -339,7 +338,7 @@ class GameScene:
         for note in self._active:
             if note.lane == lane and note.is_active():
                 diff = abs(ct - note.time)
-                if diff <= GOOD_WINDOW and diff < best_diff:
+                if diff <= POOR_WINDOW and diff < best_diff:
                     best_diff = diff
                     best_note = note
 
