@@ -48,7 +48,7 @@ def main():
             result = scene.handle_event(event)
             if result:
                 if result['action'] == 'play':
-                    scene = GameScene(screen, result['music_path'])
+                    scene = GameScene(screen, result['music_path'], result.get('difficulty', 'normal'))
                 elif result['action'] == 'menu':
                     scene = MenuScene(screen)
 

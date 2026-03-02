@@ -48,10 +48,13 @@ class MenuScene:
             'hint':     pygame.font.SysFont("dejavusans,freesans,liberationsans", 28),
         }
 
-        self._music_files = self._scan_music()
-        self._selected    = 0
-        self._scroll      = 0
-        self._tick        = 0
+        self._music_files    = self._scan_music()
+        self._selected       = 0
+        self._scroll         = 0
+        self._tick           = 0
+        self._sub_state      = 'music'   # 'music' | 'difficulty'
+        self._difficulty_sel = 0         # 0 = normal, 1 = hard
+        self._pending_path   = ''
 
     # ------------------------------------------------------------------
     # Initialisation
@@ -92,6 +95,22 @@ class MenuScene:
         if event.type != pygame.KEYDOWN:
             return None
 
+        # ── Sélection de la difficulté ──
+        if self._sub_state == 'difficulty':
+            if event.key in (pygame.K_UP, pygame.K_DOWN):
+                self._difficulty_sel = 1 - self._difficulty_sel
+            elif event.key == const.KEY_ACCEPT:
+                difficulty = 'hard' if self._difficulty_sel == 1 else 'normal'
+                return {
+                    'action':     'play',
+                    'music_path': self._pending_path,
+                    'difficulty': difficulty,
+                }
+            elif event.key == const.KEY_REFUSE:
+                self._sub_state = 'music'
+            return None
+
+        # ── Sélection de la musique ──
         if event.key == pygame.K_UP:
             self._selected = max(0, self._selected - 1)
             self._update_scroll()
@@ -102,10 +121,9 @@ class MenuScene:
 
         elif event.key == const.KEY_ACCEPT:
             if self._music_files:
-                return {
-                    'action':     'play',
-                    'music_path': self._music_files[self._selected]['path'],
-                }
+                self._pending_path   = self._music_files[self._selected]['path']
+                self._difficulty_sel = 0
+                self._sub_state      = 'difficulty'
 
         elif event.key == const.KEY_REFUSE:
             pygame.quit()
@@ -121,6 +139,9 @@ class MenuScene:
         """Dessine le menu complet."""
         self.screen.fill(_COLOR_BG)
         self._draw_title()
+        if self._sub_state == 'difficulty':
+            self._draw_difficulty()
+            return
         if self._music_files:
             self._draw_list()
         else:
@@ -136,8 +157,9 @@ class MenuScene:
         title = self._fonts['title'].render("XYLOPHONE CHAMPION", True, _COLOR_TITLE)
         self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 55))
 
-        sub = self._fonts['subtitle'].render("Sélectionnez une musique", True, _COLOR_SUBTITLE)
-        self.screen.blit(sub, (self.width // 2 - sub.get_width() // 2, 160))
+        if self._sub_state == 'music':
+            sub = self._fonts['subtitle'].render("Sélectionnez une musique", True, _COLOR_SUBTITLE)
+            self.screen.blit(sub, (self.width // 2 - sub.get_width() // 2, 160))
 
     def _draw_list(self):
         """Affiche la liste des musiques disponibles."""
@@ -185,6 +207,46 @@ class MenuScene:
         cy = self.height // 2 - 40
         self.screen.blit(msg,  (self.width // 2 - msg.get_width()  // 2, cy))
         self.screen.blit(hint, (self.width // 2 - hint.get_width() // 2, cy + 65))
+
+    def _draw_difficulty(self):
+        """Affiche le sélecteur de difficulté."""
+        cx  = self.width  // 2
+        cy  = self.height // 2
+
+        sub = self._fonts['subtitle'].render("Choisissez la difficulté", True, _COLOR_SUBTITLE)
+        self.screen.blit(sub, (cx - sub.get_width() // 2, 170))
+
+        options = [
+            ("NORMAL", "4 pistes  —  R T Y H"),
+            ("HARD",   "Joystick (piste 1)  +  R T Y"),
+        ]
+
+        box_w, box_h = 640, 110
+        gap          = 24
+        total_h      = len(options) * box_h + (len(options) - 1) * gap
+        start_y      = cy - total_h // 2
+
+        for i, (name, desc) in enumerate(options):
+            bx   = cx - box_w // 2
+            by   = start_y + i * (box_h + gap)
+            rect = pygame.Rect(bx, by, box_w, box_h)
+            selected = (i == self._difficulty_sel)
+
+            bg_col     = (35, 35, 70) if selected else (20, 20, 45)
+            border_col = _COLOR_BORDER if selected else (60, 60, 90)
+            pygame.draw.rect(self.screen, bg_col,     rect, border_radius=12)
+            pygame.draw.rect(self.screen, border_col, rect, 2, border_radius=12)
+
+            name_col = _COLOR_SELECTED if selected else _COLOR_ITEM
+            name_s   = self._fonts['item'].render(("▶  " if selected else "    ") + name, True, name_col)
+            desc_s   = self._fonts['hint'].render(desc, True, _COLOR_SUBTITLE)
+            self.screen.blit(name_s, (bx + 24, by + 16))
+            self.screen.blit(desc_s, (bx + 24, by + 66))
+
+        hint = self._fonts['hint'].render(
+            "↑ ↓  Choisir     F  Confirmer     G  Retour", True, _COLOR_HINT
+        )
+        self.screen.blit(hint, (cx - hint.get_width() // 2, self.height - 48))
 
     def _draw_hint(self):
         """Affiche les contrôles en bas de l'écran."""

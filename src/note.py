@@ -16,8 +16,12 @@ LANE_COLORS = [
 ]
 
 # Touches associées à chaque piste — boutons J1 de la borne arcade
-# Rangée basse : R T (pistes 0-1) | Rangée haute : F G (pistes 2-3)
-LANE_KEYS_DISPLAY = ['R', 'T', 'F', 'G']
+# Rangée basse : R T (pistes 0-1) | Rangée haute : Y H (pistes 2-3)
+LANE_KEYS_DISPLAY = ['R', 'T', 'Y', 'H']
+
+# Directions pour le mode difficile (piste 0)
+DIRECTIONS       = ['up', 'down', 'left', 'right']
+DIRECTION_ARROWS = {'up': '↑', 'down': '↓', 'left': '←', 'right': '→'}
 
 # Fenêtres de jugement en secondes
 PERFECT_WINDOW = 0.07   # ±70 ms → PERFECT
@@ -55,11 +59,12 @@ class Note:
     """
 
     def __init__(self, lane: int, time: float):
-        self.lane = lane
-        self.time = time
-        self.hit = False
-        self.missed = False
-        self.judgment = None
+        self.lane      = lane
+        self.time      = time
+        self.hit       = False
+        self.missed    = False
+        self.judgment  = None
+        self.direction = None   # 'up'/'down'/'left'/'right' — mode difficile piste 0
 
     # ------------------------------------------------------------------
     # Position

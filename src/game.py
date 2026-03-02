@@ -8,6 +8,7 @@ Auteurs: Julien Behani, Enzo Fournier - 2026
 """
 
 import os
+import random
 import pygame
 import constants
 
@@ -21,6 +22,8 @@ from note import (
     FALL_SPEED,
     HIT_Y,
     NOTE_HEIGHT,
+    DIRECTIONS,
+    DIRECTION_ARROWS,
 )
 from analyzer import analyze_music
 from constants import KEY_ACCEPT
@@ -47,8 +50,25 @@ _COUNTDOWN   = 3.0
 # quand il reste TIME_VISIBLE secondes avant leur heure de frappe.
 _TIME_VISIBLE = HIT_Y / FALL_SPEED   # ≈ 2.07 s
 
-# Boutons J1 de la borne arcade — rangée basse : R T (pistes 0-1) | rangée haute : F G (pistes 2-3)
-_LANE_KEYS = [pygame.K_r, pygame.K_t, pygame.K_f, pygame.K_g]
+# Touches par défaut (mode normal) : R T Y H
+_LANE_KEYS = [pygame.K_r, pygame.K_t, pygame.K_y, pygame.K_h]
+
+# Mode difficile : R T Y pour les pistes 1-2-3, flèches pour la piste 0
+_HARD_LANE_KEYS = [pygame.K_r, pygame.K_t, pygame.K_y]   # → pistes 1, 2, 3
+_ARROW_KEYS = {
+    pygame.K_UP:    'up',
+    pygame.K_DOWN:  'down',
+    pygame.K_LEFT:  'left',
+    pygame.K_RIGHT: 'right',
+}
+
+# Couleurs des flèches directionnelles (mode difficile, piste 0)
+_ARROW_COLORS = {
+    'up':    ( 60, 230,  80),   # vert
+    'down':  (255, 220,  50),   # jaune
+    'left':  ( 80, 160, 255),   # bleu
+    'right': (255,  80, 200),   # magenta
+}
 
 # ------------------------------------------------------------------
 # Couleurs
@@ -80,12 +100,13 @@ class GameScene:
     - 'error'     : erreur de chargement
     """
 
-    def __init__(self, screen: pygame.Surface, music_path: str):
+    def __init__(self, screen: pygame.Surface, music_path: str, difficulty: str = 'normal'):
         self.screen     = screen
         self.width      = screen.get_width()
         self.height     = screen.get_height()
         self.music_path = music_path
         self.music_name = os.path.splitext(os.path.basename(music_path))[0]
+        self._difficulty = difficulty
 
         self._fonts = {
             'score':    pygame.font.Font(None, 64),
@@ -157,18 +178,36 @@ class GameScene:
 
             # Frappe de piste
             if self._state == 'playing':
-                for i, key in enumerate(_LANE_KEYS):
-                    if event.key == key:
-                        self._press_lane(i)
+                if self._difficulty == 'hard':
+                    if event.key in _ARROW_KEYS:
+                        self._key_pressed[0] = True
+                        self._key_flash[0]   = 12
+                        self._press_lane_arrow(_ARROW_KEYS[event.key])
+                    else:
+                        for i, key in enumerate(_HARD_LANE_KEYS):
+                            if event.key == key:
+                                self._press_lane(i + 1)
+                else:
+                    for i, key in enumerate(_LANE_KEYS):
+                        if event.key == key:
+                            self._press_lane(i)
 
             # Écran de résultat → menu
             if self._state == 'result' and event.key == KEY_ACCEPT:
                 return {'action': 'menu'}
 
         if event.type == pygame.KEYUP:
-            for i, key in enumerate(_LANE_KEYS):
-                if event.key == key:
-                    self._key_pressed[i] = False
+            if self._difficulty == 'hard':
+                if event.key in _ARROW_KEYS:
+                    self._key_pressed[0] = False
+                else:
+                    for i, key in enumerate(_HARD_LANE_KEYS):
+                        if event.key == key:
+                            self._key_pressed[i + 1] = False
+            else:
+                for i, key in enumerate(_LANE_KEYS):
+                    if event.key == key:
+                        self._key_pressed[i] = False
 
         return None
 
@@ -275,6 +314,10 @@ class GameScene:
         try:
             raw_notes, _tempo, self._music_duration = analyze_music(self.music_path)
             self._notes = [Note(n['lane'], n['time']) for n in raw_notes]
+            if self._difficulty == 'hard':
+                for note in self._notes:
+                    if note.lane == 0:
+                        note.direction = random.choice(DIRECTIONS)
             pygame.mixer.music.load(self.music_path)
             self._state        = 'countdown'
             self._countdown_ms = pygame.time.get_ticks()
@@ -349,6 +392,31 @@ class GameScene:
             judgment = best_note.try_hit(ct)
             if judgment:
                 self._register_hit(judgment, lane)
+
+    def _press_lane_arrow(self, direction: str):
+        """
+        Mode difficile — traite une touche directionnelle pour la piste 0.
+
+        Cherche la note active de piste 0 dont la direction correspond.
+
+        Args:
+            direction: Direction pressée ('up', 'down', 'left', 'right').
+        """
+        ct        = self._current_time
+        best_note = None
+        best_diff = float('inf')
+
+        for note in self._active:
+            if note.lane == 0 and note.is_active() and note.direction == direction:
+                diff = abs(ct - note.time)
+                if diff <= POOR_WINDOW and diff < best_diff:
+                    best_diff = diff
+                    best_note = note
+
+        if best_note:
+            judgment = best_note.try_hit(ct)
+            if judgment:
+                self._register_hit(judgment, 0)
 
     def _register_hit(self, judgment: str, lane: int):
         """
@@ -475,6 +543,41 @@ class GameScene:
             hl_rect  = pygame.Rect(x + 6, y - NOTE_HEIGHT // 2, _LANE_W - 12, 7)
             pygame.draw.rect(self.screen, hl_color, hl_rect, border_radius=7)
 
+            # Flèche directionnelle (mode difficile, piste 0)
+            if self._difficulty == 'hard' and note.lane == 0 and note.direction:
+                self._draw_direction_arrow(x, y, note.direction)
+
+    def _draw_direction_arrow(self, note_x: int, note_y: int, direction: str):
+        """
+        Dessine une grande flèche colorée (par direction) sur une note de piste 0.
+
+        Args:
+            note_x: X de gauche de la piste.
+            note_y: Y central de la note.
+            direction: 'up', 'down', 'left' ou 'right'.
+        """
+        cx    = note_x + _LANE_W // 2
+        cy    = note_y
+        v     = NOTE_HEIGHT // 2 - 1   # demi-hauteur (quasi toute la note)
+        hw    = 22                      # demi-largeur de la base
+
+        if direction == 'up':
+            pts = [(cx, cy - v), (cx - hw, cy + v), (cx + hw, cy + v)]
+        elif direction == 'down':
+            pts = [(cx, cy + v), (cx - hw, cy - v), (cx + hw, cy - v)]
+        elif direction == 'left':
+            pts = [(cx - hw, cy), (cx + v, cy - v), (cx + v, cy + v)]
+        elif direction == 'right':
+            pts = [(cx + hw, cy), (cx - v, cy - v), (cx - v, cy + v)]
+        else:
+            return
+
+        color      = _ARROW_COLORS[direction]
+        shadow_pts = [(x + 2, y + 2) for x, y in pts]
+        pygame.draw.polygon(self.screen, (0, 0, 0), shadow_pts)   # ombre décalée
+        pygame.draw.polygon(self.screen, color,     pts)           # remplissage coloré
+        pygame.draw.polygon(self.screen, (0, 0, 0), pts, 2)       # contour net
+
     def _draw_hit_zones(self):
         """Dessine les zones de frappe en bas de chaque piste."""
         for i in range(NUM_LANES):
@@ -502,7 +605,11 @@ class GameScene:
 
     def _draw_key_labels(self):
         """Affiche les labels des touches sous les zones de frappe."""
-        for i, label in enumerate(LANE_KEYS_DISPLAY):
+        if self._difficulty == 'hard':
+            labels = ['←↑↓→', 'R', 'T', 'Y']
+        else:
+            labels = LANE_KEYS_DISPLAY
+        for i, label in enumerate(labels):
             x   = _LANE_LEFT + i * (_LANE_W + _LANE_GAP) + _LANE_W // 2
             col = _COL_WHITE if self._key_pressed[i] else LANE_COLORS[i]
             txt = self._fonts['info'].render(label, True, col)
