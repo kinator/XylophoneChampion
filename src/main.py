@@ -32,7 +32,7 @@ def main():
     pygame.init()
     pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
 
-    screen = pygame.display.set_mode((_SCREEN_W, _SCREEN_H))
+    screen = pygame.display.set_mode((_SCREEN_W, _SCREEN_H), pygame.FULLSCREEN)
     pygame.display.set_caption("Xylophone Champion")
     clock = pygame.time.Clock()
 

@@ -43,8 +43,9 @@ class MenuScene:
         self._fonts = {
             'title':    pygame.font.Font(None, 90),
             'subtitle': pygame.font.Font(None, 42),
-            'item':     pygame.font.Font(None, 52),
+            'item':     pygame.font.SysFont("dejavusans,freesans,liberationsans", 48),
             'small':    pygame.font.Font(None, 32),
+            'hint':     pygame.font.SysFont("dejavusans,freesans,liberationsans", 28),
         }
 
         self._music_files = self._scan_music()
@@ -187,8 +188,8 @@ class MenuScene:
 
     def _draw_hint(self):
         """Affiche les contrôles en bas de l'écran."""
-        hint = self._fonts['small'].render(
-            "↑ ↓  Naviguer     ENTRÉE  Jouer     ÉCHAP  Quitter",
+        hint = self._fonts['hint'].render(
+            "↑ ↓  Naviguer     F  Jouer     H  Quitter",
             True, _COLOR_HINT,
         )
         self.screen.blit(hint, (self.width // 2 - hint.get_width() // 2, self.height - 48))
