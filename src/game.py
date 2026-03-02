@@ -9,6 +9,7 @@ Auteurs: Julien Behani, Enzo Fournier - 2026
 
 import os
 import pygame
+import constants
 
 from note import (
     Note,
@@ -143,12 +144,12 @@ class GameScene:
         """
         if event.type == pygame.KEYDOWN:
             # Retour menu
-            if event.key == pygame.K_ESCAPE:
+            if event.key == constants.KEY_MENU:
                 pygame.mixer.music.stop()
                 return {'action': 'menu'}
 
             # Pause / reprise
-            if event.key == pygame.K_p:
+            if event.key == constants.KEY_PAUSE:
                 if self._state == 'playing':
                     self._pause()
                 elif self._state == 'paused':
