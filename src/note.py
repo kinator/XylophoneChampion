@@ -65,6 +65,9 @@ class Note:
         self.missed    = False
         self.judgment  = None
         self.direction = None   # 'up'/'down'/'left'/'right' — mode difficile piste 0
+        # État indépendant pour le joueur 2
+        self.hit_p2    = False
+        self.missed_p2 = False
 
     # ------------------------------------------------------------------
     # Position
@@ -136,5 +139,37 @@ class Note:
         return False
 
     def is_active(self) -> bool:
-        """Retourne True si la note n'a pas encore été traitée."""
+        """Retourne True si la note n'a pas encore été traitée (J1)."""
         return not self.hit and not self.missed
+
+    # ------------------------------------------------------------------
+    # Joueur 2
+    # ------------------------------------------------------------------
+
+    def try_hit_p2(self, current_time: float) -> str | None:
+        """Même logique que try_hit mais pour le joueur 2."""
+        if self.hit_p2 or self.missed_p2:
+            return None
+        diff = abs(current_time - self.time)
+        if diff <= PERFECT_WINDOW:
+            self.hit_p2 = True
+            return 'perfect'
+        if diff <= GOOD_WINDOW:
+            self.hit_p2 = True
+            return 'good'
+        if diff <= POOR_WINDOW:
+            self.hit_p2 = True
+            return 'poor'
+        return None
+
+    def check_missed_p2(self, current_time: float) -> bool:
+        """Même logique que check_missed mais pour le joueur 2."""
+        if not self.hit_p2 and not self.missed_p2:
+            if current_time > self.time + POOR_WINDOW:
+                self.missed_p2 = True
+                return True
+        return False
+
+    def is_active_p2(self) -> bool:
+        """Retourne True si la note n'a pas encore été traitée par J2."""
+        return not self.hit_p2 and not self.missed_p2

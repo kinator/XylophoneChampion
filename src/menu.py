@@ -52,8 +52,9 @@ class MenuScene:
         self._selected       = 0
         self._scroll         = 0
         self._tick           = 0
-        self._sub_state      = 'music'   # 'music' | 'difficulty'
+        self._sub_state      = 'music'   # 'music' | 'difficulty' | 'players'
         self._difficulty_sel = 0         # 0 = normal, 1 = hard
+        self._players_sel    = 0         # 0 = 1 joueur, 1 = 2 joueurs
         self._pending_path   = ''
 
     # ------------------------------------------------------------------
@@ -95,17 +96,30 @@ class MenuScene:
         if event.type != pygame.KEYDOWN:
             return None
 
+        # ── Sélection du nombre de joueurs ──
+        if self._sub_state == 'players':
+            if event.key in (pygame.K_UP, pygame.K_DOWN):
+                self._players_sel = 1 - self._players_sel
+            elif event.key == const.KEY_ACCEPT:
+                difficulty = 'hard' if self._difficulty_sel == 1 else 'normal'
+                players    = 2 if self._players_sel == 1 else 1
+                return {
+                    'action':     'play',
+                    'music_path': self._pending_path,
+                    'difficulty': difficulty,
+                    'players':    players,
+                }
+            elif event.key == const.KEY_REFUSE:
+                self._sub_state = 'difficulty'
+            return None
+
         # ── Sélection de la difficulté ──
         if self._sub_state == 'difficulty':
             if event.key in (pygame.K_UP, pygame.K_DOWN):
                 self._difficulty_sel = 1 - self._difficulty_sel
             elif event.key == const.KEY_ACCEPT:
-                difficulty = 'hard' if self._difficulty_sel == 1 else 'normal'
-                return {
-                    'action':     'play',
-                    'music_path': self._pending_path,
-                    'difficulty': difficulty,
-                }
+                self._players_sel = 0
+                self._sub_state   = 'players'
             elif event.key == const.KEY_REFUSE:
                 self._sub_state = 'music'
             return None
@@ -141,6 +155,9 @@ class MenuScene:
         self._draw_title()
         if self._sub_state == 'difficulty':
             self._draw_difficulty()
+            return
+        if self._sub_state == 'players':
+            self._draw_players()
             return
         if self._music_files:
             self._draw_list()
@@ -231,6 +248,51 @@ class MenuScene:
             by   = start_y + i * (box_h + gap)
             rect = pygame.Rect(bx, by, box_w, box_h)
             selected = (i == self._difficulty_sel)
+
+            bg_col     = (35, 35, 70) if selected else (20, 20, 45)
+            border_col = _COLOR_BORDER if selected else (60, 60, 90)
+            pygame.draw.rect(self.screen, bg_col,     rect, border_radius=12)
+            pygame.draw.rect(self.screen, border_col, rect, 2, border_radius=12)
+
+            name_col = _COLOR_SELECTED if selected else _COLOR_ITEM
+            name_s   = self._fonts['item'].render(("▶  " if selected else "    ") + name, True, name_col)
+            desc_s   = self._fonts['hint'].render(desc, True, _COLOR_SUBTITLE)
+            self.screen.blit(name_s, (bx + 24, by + 16))
+            self.screen.blit(desc_s, (bx + 24, by + 66))
+
+        hint = self._fonts['hint'].render(
+            "↑ ↓  Choisir     F  Confirmer     G  Retour", True, _COLOR_HINT
+        )
+        self.screen.blit(hint, (cx - hint.get_width() // 2, self.height - 48))
+
+    def _draw_players(self):
+        """Affiche le sélecteur du nombre de joueurs."""
+        cx  = self.width  // 2
+        cy  = self.height // 2
+
+        sub = self._fonts['subtitle'].render("Nombre de joueurs", True, _COLOR_SUBTITLE)
+        self.screen.blit(sub, (cx - sub.get_width() // 2, 170))
+
+        if self._difficulty_sel == 1:  # hard
+            p2_hint = "J2 : O K L M (piste 1)  +  1  2  3"
+        else:
+            p2_hint = "J2 : 1  2  3  4"
+
+        options = [
+            ("1 JOUEUR",  "Jouer seul"),
+            ("2 JOUEURS", p2_hint),
+        ]
+
+        box_w, box_h = 640, 110
+        gap          = 24
+        total_h      = len(options) * box_h + (len(options) - 1) * gap
+        start_y      = cy - total_h // 2
+
+        for i, (name, desc) in enumerate(options):
+            bx   = cx - box_w // 2
+            by   = start_y + i * (box_h + gap)
+            rect = pygame.Rect(bx, by, box_w, box_h)
+            selected = (i == self._players_sel)
 
             bg_col     = (35, 35, 70) if selected else (20, 20, 45)
             border_col = _COLOR_BORDER if selected else (60, 60, 90)

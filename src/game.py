@@ -62,6 +62,25 @@ _ARROW_KEYS = {
     pygame.K_RIGHT: 'right',
 }
 
+# Touches Joueur 2 — mode normal : 1 2 3 4
+_P2_LANE_KEYS      = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]
+# Touches Joueur 2 — mode difficile : pistes 1-2-3
+_P2_HARD_LANE_KEYS = [pygame.K_1, pygame.K_2, pygame.K_3]
+# Touches Joueur 2 — mode difficile, piste 0 : O K L M
+_P2_WASD_KEYS = {
+    pygame.K_o: 'up',
+    pygame.K_k: 'left',
+    pygame.K_l: 'right',
+    pygame.K_m: 'down',
+}
+
+# Mode 2 joueurs — chaque joueur a son propre demi-écran (640 px de large)
+_2P_LANE_W   = 120
+_2P_LANE_GAP = 14
+_2P_AREA_W   = NUM_LANES * _2P_LANE_W + (NUM_LANES - 1) * _2P_LANE_GAP   # 522
+_2P_J1_LEFT  = (_SCREEN_W // 2 - _2P_AREA_W) // 2                         # 59
+_2P_J2_LEFT  = _SCREEN_W // 2 + (_SCREEN_W // 2 - _2P_AREA_W) // 2       # 699
+
 # Couleurs des flèches directionnelles (mode difficile, piste 0)
 _ARROW_COLORS = {
     'up':    ( 60, 230,  80),   # vert
@@ -100,13 +119,14 @@ class GameScene:
     - 'error'     : erreur de chargement
     """
 
-    def __init__(self, screen: pygame.Surface, music_path: str, difficulty: str = 'normal'):
+    def __init__(self, screen: pygame.Surface, music_path: str, difficulty: str = 'normal', players: int = 1):
         self.screen     = screen
         self.width      = screen.get_width()
         self.height     = screen.get_height()
         self.music_path = music_path
         self.music_name = os.path.splitext(os.path.basename(music_path))[0]
         self._difficulty = difficulty
+        self._players    = players
 
         self._fonts = {
             'score':    pygame.font.Font(None, 64),
@@ -123,14 +143,23 @@ class GameScene:
         self._active: list[Note] = []   # notes dans la fenêtre de jeu
         self._note_idx = 0              # prochain index à injecter
 
-        # --- Score ---
+        # --- Score J1 ---
         self.score         = 0
         self.combo         = 0
         self.max_combo     = 0
         self.perfect_count = 0
         self.good_count    = 0
         self.miss_count    = 0
-        self.health        = 100.0      # 0-100
+        self.health        = 100.0
+
+        # --- Score J2 ---
+        self.score_p2      = 0
+        self.combo_p2      = 0
+        self.max_combo_p2  = 0
+        self.perfect_p2    = 0
+        self.good_p2       = 0
+        self.miss_p2       = 0
+        self.health_p2     = 100.0
 
         # --- Timing ---
         self._music_duration  = 0.0
@@ -139,8 +168,10 @@ class GameScene:
         self._current_time    = 0.0
 
         # --- Visuels ---
-        self._key_pressed  = [False] * NUM_LANES
-        self._key_flash    = [0] * NUM_LANES    # frames restantes de flash
+        self._key_pressed    = [False] * NUM_LANES
+        self._key_flash      = [0] * NUM_LANES    # frames restantes de flash
+        self._key_pressed_p2 = [False] * NUM_LANES
+        self._key_flash_p2   = [0] * NUM_LANES
         self._judgments: list[dict] = []        # textes animés
 
         # --- État ---
@@ -176,27 +207,44 @@ class GameScene:
                 elif self._state == 'paused':
                     self._resume()
 
-            # Frappe de piste
+            # Frappe de piste — Joueur 1
             if self._state == 'playing':
                 if self._difficulty == 'hard':
                     if event.key in _ARROW_KEYS:
                         self._key_pressed[0] = True
                         self._key_flash[0]   = 12
-                        self._press_lane_arrow(_ARROW_KEYS[event.key])
+                        self._press_lane_arrow(_ARROW_KEYS[event.key], player=1)
                     else:
                         for i, key in enumerate(_HARD_LANE_KEYS):
                             if event.key == key:
-                                self._press_lane(i + 1)
+                                self._press_lane(i + 1, player=1)
                 else:
                     for i, key in enumerate(_LANE_KEYS):
                         if event.key == key:
-                            self._press_lane(i)
+                            self._press_lane(i, player=1)
+
+            # Frappe de piste — Joueur 2
+            if self._state == 'playing' and self._players == 2:
+                if self._difficulty == 'hard':
+                    if event.key in _P2_WASD_KEYS:
+                        self._key_pressed_p2[0] = True
+                        self._key_flash_p2[0]   = 12
+                        self._press_lane_arrow(_P2_WASD_KEYS[event.key], player=2)
+                    else:
+                        for i, key in enumerate(_P2_HARD_LANE_KEYS):
+                            if event.key == key:
+                                self._press_lane(i + 1, player=2)
+                else:
+                    for i, key in enumerate(_P2_LANE_KEYS):
+                        if event.key == key:
+                            self._press_lane(i, player=2)
 
             # Écran de résultat → menu
             if self._state == 'result' and event.key == KEY_ACCEPT:
                 return {'action': 'menu'}
 
         if event.type == pygame.KEYUP:
+            # Joueur 1
             if self._difficulty == 'hard':
                 if event.key in _ARROW_KEYS:
                     self._key_pressed[0] = False
@@ -208,6 +256,20 @@ class GameScene:
                 for i, key in enumerate(_LANE_KEYS):
                     if event.key == key:
                         self._key_pressed[i] = False
+
+            # Joueur 2
+            if self._players == 2:
+                if self._difficulty == 'hard':
+                    if event.key in _P2_WASD_KEYS:
+                        self._key_pressed_p2[0] = False
+                    else:
+                        for i, key in enumerate(_P2_HARD_LANE_KEYS):
+                            if event.key == key:
+                                self._key_pressed_p2[i + 1] = False
+                else:
+                    for i, key in enumerate(_P2_LANE_KEYS):
+                        if event.key == key:
+                            self._key_pressed_p2[i] = False
 
         return None
 
@@ -245,19 +307,30 @@ class GameScene:
         # Détecter les notes ratées
         for note in self._active:
             if note.is_active() and note.check_missed(ct):
-                self._register_miss(note)
+                self._register_miss(note, player=1)
+            if self._players == 2 and note.is_active_p2() and note.check_missed_p2(ct):
+                self._register_miss(note, player=2)
 
         # Nettoyer les notes traitées et sorties de l'écran
-        self._active = [
-            n for n in self._active
-            if not (
-                (n.hit     and ct - n.time > 0.4) or
-                (n.missed  and ct - n.time > 0.6)
-            )
-        ]
+        if self._players == 2:
+            self._active = [
+                n for n in self._active
+                if not (
+                    (n.hit or n.missed) and (n.hit_p2 or n.missed_p2) and ct - n.time > 0.6
+                )
+            ]
+        else:
+            self._active = [
+                n for n in self._active
+                if not (
+                    (n.hit     and ct - n.time > 0.4) or
+                    (n.missed  and ct - n.time > 0.6)
+                )
+            ]
 
         # Mettre à jour les flashs de touches
-        self._key_flash = [max(0, f - 1) for f in self._key_flash]
+        self._key_flash    = [max(0, f - 1) for f in self._key_flash]
+        self._key_flash_p2 = [max(0, f - 1) for f in self._key_flash_p2]
 
         # Mettre à jour les textes de jugement (remontée + fondu)
         self._judgments = [
@@ -271,8 +344,12 @@ class GameScene:
             self._end()
 
         # Vie à zéro
-        if self.health <= 0:
-            self._end()
+        if self._players == 2:
+            if self.health <= 0 and self.health_p2 <= 0:
+                self._end()
+        else:
+            if self.health <= 0:
+                self._end()
 
     def draw(self):
         """Dessine la frame courante."""
@@ -365,104 +442,124 @@ class GameScene:
     # Frappe
     # ==================================================================
 
-    def _press_lane(self, lane: int):
+    def _press_lane(self, lane: int, player: int = 1):
         """
         Traite l'appui sur une piste.
 
-        Recherche la note active la plus proche dans la piste et tente de la frapper.
-
         Args:
-            lane: Indice de la piste frappée (0-4).
+            lane:   Indice de la piste frappée (0-4).
+            player: Numéro du joueur (1 ou 2).
         """
-        self._key_pressed[lane] = True
-        self._key_flash[lane]   = 12
+        if player == 1:
+            self._key_pressed[lane] = True
+            self._key_flash[lane]   = 12
+        else:
+            self._key_pressed_p2[lane] = True
+            self._key_flash_p2[lane]   = 12
 
-        ct         = self._current_time
-        best_note  = None
-        best_diff  = float('inf')
+        ct        = self._current_time
+        best_note = None
+        best_diff = float('inf')
 
         for note in self._active:
-            if note.lane == lane and note.is_active():
+            is_active = note.is_active() if player == 1 else note.is_active_p2()
+            if note.lane == lane and is_active:
                 diff = abs(ct - note.time)
                 if diff <= POOR_WINDOW and diff < best_diff:
                     best_diff = diff
                     best_note = note
 
         if best_note:
-            judgment = best_note.try_hit(ct)
+            judgment = best_note.try_hit(ct) if player == 1 else best_note.try_hit_p2(ct)
             if judgment:
-                self._register_hit(judgment, lane)
+                self._register_hit(judgment, lane, player)
 
-    def _press_lane_arrow(self, direction: str):
+    def _press_lane_arrow(self, direction: str, player: int = 1):
         """
         Mode difficile — traite une touche directionnelle pour la piste 0.
 
-        Cherche la note active de piste 0 dont la direction correspond.
-
         Args:
             direction: Direction pressée ('up', 'down', 'left', 'right').
+            player:    Numéro du joueur (1 ou 2).
         """
         ct        = self._current_time
         best_note = None
         best_diff = float('inf')
 
         for note in self._active:
-            if note.lane == 0 and note.is_active() and note.direction == direction:
+            is_active = note.is_active() if player == 1 else note.is_active_p2()
+            if note.lane == 0 and is_active and note.direction == direction:
                 diff = abs(ct - note.time)
                 if diff <= POOR_WINDOW and diff < best_diff:
                     best_diff = diff
                     best_note = note
 
         if best_note:
-            judgment = best_note.try_hit(ct)
+            judgment = best_note.try_hit(ct) if player == 1 else best_note.try_hit_p2(ct)
             if judgment:
-                self._register_hit(judgment, 0)
+                self._register_hit(judgment, 0, player)
 
-    def _register_hit(self, judgment: str, lane: int):
+    def _register_hit(self, judgment: str, lane: int, player: int = 1):
         """
         Enregistre un coup réussi et met à jour score / combo.
 
         Args:
-            judgment: 'perfect' ou 'good'.
-            lane: Piste concernée.
+            judgment: 'perfect', 'good' ou 'poor'.
+            lane:     Piste concernée.
+            player:   Numéro du joueur (1 ou 2).
         """
-        self.combo     += 1
-        self.max_combo  = max(self.max_combo, self.combo)
-        multiplier      = min(4, 1 + self.combo // 10)
-
-        self.score += JUDGMENT_POINTS[judgment] * multiplier
-
-        if judgment == 'perfect':
-            self.perfect_count += 1
-            color = _COL_PERFECT
+        if player == 1:
+            self.combo     += 1
+            self.max_combo  = max(self.max_combo, self.combo)
+            multiplier      = min(4, 1 + self.combo // 10)
+            self.score     += JUDGMENT_POINTS[judgment] * multiplier
+            if judgment == 'perfect':
+                self.perfect_count += 1
+            else:
+                self.good_count += 1
         else:
-            self.good_count += 1
-            color = _COL_GOOD
+            self.combo_p2     += 1
+            self.max_combo_p2  = max(self.max_combo_p2, self.combo_p2)
+            multiplier         = min(4, 1 + self.combo_p2 // 10)
+            self.score_p2     += JUDGMENT_POINTS[judgment] * multiplier
+            if judgment == 'perfect':
+                self.perfect_p2 += 1
+            else:
+                self.good_p2 += 1
 
-        self._spawn_judgment(judgment.upper(), lane, color)
+        color = _COL_PERFECT if judgment == 'perfect' else _COL_GOOD
+        self._spawn_judgment(judgment.upper(), lane, color, player)
 
-    def _register_miss(self, note: Note):
+    def _register_miss(self, note: Note, player: int = 1):
         """
         Enregistre un raté et pénalise la vie / le combo.
 
         Args:
-            note: La note ratée.
+            note:   La note ratée.
+            player: Numéro du joueur (1 ou 2).
         """
-        self.miss_count += 1
-        self.combo       = 0
-        self.health      = max(0.0, self.health - 10.0)
-        self._spawn_judgment("MISS", note.lane, _COL_MISS)
+        if player == 1:
+            self.miss_count += 1
+            self.combo       = 0
+            self.health      = max(0.0, self.health - 10.0)
+        else:
+            self.miss_p2     += 1
+            self.combo_p2    = 0
+            self.health_p2   = max(0.0, self.health_p2 - 10.0)
+        self._spawn_judgment("MISS", note.lane, _COL_MISS, player)
 
-    def _spawn_judgment(self, text: str, lane: int, color: tuple):
+    def _spawn_judgment(self, text: str, lane: int, color: tuple, player: int = 1):
         """
-        Crée un texte de jugement animé centré sur la piste.
+        Crée un texte de jugement animé centré sur la piste du joueur.
 
         Args:
             text: Texte à afficher ('PERFECT', 'GOOD', 'MISS').
             lane: Piste sur laquelle afficher le texte.
             color: Couleur RGB du texte.
+            player: Numéro du joueur (1 ou 2).
         """
-        x = _LANE_LEFT + lane * (_LANE_W + _LANE_GAP) + _LANE_W // 2
+        left, lw, lg = self._get_lane_geom(player)
+        x = left + lane * (lw + lg) + lw // 2
         self._judgments.append({
             'text':  text,
             'x':     x,
@@ -470,6 +567,13 @@ class GameScene:
             'alpha': 255,
             'color': color,
         })
+
+    def _get_lane_geom(self, player: int = 1) -> tuple:
+        """Retourne (lane_left, lane_w, lane_gap) pour le joueur donné."""
+        if self._players == 2:
+            left = _2P_J1_LEFT if player == 1 else _2P_J2_LEFT
+            return left, _2P_LANE_W, _2P_LANE_GAP
+        return _LANE_LEFT, _LANE_W, _LANE_GAP
 
     # ==================================================================
     # Fin de partie
@@ -508,55 +612,57 @@ class GameScene:
         self.screen.blit(num, (self.width // 2 - num.get_width() // 2, self.height // 2 - 120))
 
     def _draw_lanes(self):
-        """Dessine les bandes colorées de chaque piste."""
-        for i in range(NUM_LANES):
-            col  = LANE_COLORS[i]
-            bg   = _COL_LANE_BG(col)
-            x    = _LANE_LEFT + i * (_LANE_W + _LANE_GAP)
-            h    = HIT_Y - _LANE_TOP + _HIT_ZONE_H
-
-            # Fond sombre de la piste
-            pygame.draw.rect(self.screen, bg, (x, _LANE_TOP, _LANE_W, h))
-            # Bordure colorée
-            pygame.draw.rect(self.screen, col, (x, _LANE_TOP, _LANE_W, h), 2)
+        """Dessine les bandes colorées de chaque piste (les deux xylophones en 2P)."""
+        h       = HIT_Y - _LANE_TOP + _HIT_ZONE_H
+        players = [1, 2] if self._players == 2 else [1]
+        for player in players:
+            left, lw, lg = self._get_lane_geom(player)
+            for i in range(NUM_LANES):
+                col = LANE_COLORS[i]
+                bg  = _COL_LANE_BG(col)
+                x   = left + i * (lw + lg)
+                pygame.draw.rect(self.screen, bg,  (x, _LANE_TOP, lw, h))
+                pygame.draw.rect(self.screen, col, (x, _LANE_TOP, lw, h), 2)
 
     def _draw_notes(self):
-        """Dessine les notes tombantes dans leurs pistes respectives."""
-        ct = self._current_time
-        for note in self._active:
-            if not note.is_active():
-                continue
+        """Dessine les notes tombantes (J1 dans son xylophone, J2 dans le sien)."""
+        ct      = self._current_time
+        players = [1, 2] if self._players == 2 else [1]
+        for player in players:
+            left, lw, lg = self._get_lane_geom(player)
+            for note in self._active:
+                active = note.is_active() if player == 1 else note.is_active_p2()
+                if not active:
+                    continue
 
-            y = note.get_y(ct)
-            if y < _LANE_TOP - NOTE_HEIGHT or y > HIT_Y + NOTE_HEIGHT:
-                continue
+                y = note.get_y(ct)
+                if y < _LANE_TOP - NOTE_HEIGHT or y > HIT_Y + NOTE_HEIGHT:
+                    continue
 
-            col = LANE_COLORS[note.lane]
-            x   = _LANE_LEFT + note.lane * (_LANE_W + _LANE_GAP)
+                col = LANE_COLORS[note.lane]
+                x   = left + note.lane * (lw + lg)
 
-            # Corps de la note
-            rect = pygame.Rect(x + 6, y - NOTE_HEIGHT // 2, _LANE_W - 12, NOTE_HEIGHT)
-            pygame.draw.rect(self.screen, col, rect, border_radius=7)
+                rect = pygame.Rect(x + 6, y - NOTE_HEIGHT // 2, lw - 12, NOTE_HEIGHT)
+                pygame.draw.rect(self.screen, col, rect, border_radius=7)
 
-            # Surbrillance en haut de la note
-            hl_color = tuple(min(255, c + 80) for c in col)
-            hl_rect  = pygame.Rect(x + 6, y - NOTE_HEIGHT // 2, _LANE_W - 12, 7)
-            pygame.draw.rect(self.screen, hl_color, hl_rect, border_radius=7)
+                hl_color = tuple(min(255, c + 80) for c in col)
+                hl_rect  = pygame.Rect(x + 6, y - NOTE_HEIGHT // 2, lw - 12, 7)
+                pygame.draw.rect(self.screen, hl_color, hl_rect, border_radius=7)
 
-            # Flèche directionnelle (mode difficile, piste 0)
-            if self._difficulty == 'hard' and note.lane == 0 and note.direction:
-                self._draw_direction_arrow(x, y, note.direction)
+                if self._difficulty == 'hard' and note.lane == 0 and note.direction:
+                    self._draw_direction_arrow(x, y, note.direction, lw)
 
-    def _draw_direction_arrow(self, note_x: int, note_y: int, direction: str):
+    def _draw_direction_arrow(self, note_x: int, note_y: int, direction: str, lane_w: int = _LANE_W):
         """
         Dessine une grande flèche colorée (par direction) sur une note de piste 0.
 
         Args:
-            note_x: X de gauche de la piste.
-            note_y: Y central de la note.
+            note_x:  X de gauche de la piste.
+            note_y:  Y central de la note.
             direction: 'up', 'down', 'left' ou 'right'.
+            lane_w:  Largeur de la piste (pixels).
         """
-        cx    = note_x + _LANE_W // 2
+        cx    = note_x + lane_w // 2
         cy    = note_y
         v     = NOTE_HEIGHT // 2 - 1   # demi-hauteur (quasi toute la note)
         hw    = 22                      # demi-largeur de la base
@@ -579,41 +685,61 @@ class GameScene:
         pygame.draw.polygon(self.screen, (0, 0, 0), pts, 2)       # contour net
 
     def _draw_hit_zones(self):
-        """Dessine les zones de frappe en bas de chaque piste."""
-        for i in range(NUM_LANES):
-            col  = LANE_COLORS[i]
-            x    = _LANE_LEFT + i * (_LANE_W + _LANE_GAP)
-            rect = pygame.Rect(x, HIT_Y - _HIT_ZONE_H // 2, _LANE_W, _HIT_ZONE_H)
+        """Dessine les zones de frappe (les deux xylophones en 2P)."""
+        players = [1, 2] if self._players == 2 else [1]
+        for player in players:
+            left, lw, lg = self._get_lane_geom(player)
+            kp  = self._key_pressed    if player == 1 else self._key_pressed_p2
+            kfl = self._key_flash      if player == 1 else self._key_flash_p2
+            for i in range(NUM_LANES):
+                col  = LANE_COLORS[i]
+                x    = left + i * (lw + lg)
+                rect = pygame.Rect(x, HIT_Y - _HIT_ZONE_H // 2, lw, _HIT_ZONE_H)
 
-            if self._key_pressed[i] or self._key_flash[i] > 0:
-                # Piste allumée lors d'un appui
-                bright = tuple(min(255, c + 60) for c in col)
-                pygame.draw.rect(self.screen, bright, rect, border_radius=9)
+                if kp[i] or kfl[i] > 0:
+                    bright = tuple(min(255, c + 60) for c in col)
+                    pygame.draw.rect(self.screen, bright, rect, border_radius=9)
+                    glow = pygame.Surface((lw + 24, _HIT_ZONE_H + 40), pygame.SRCALPHA)
+                    glow.fill((*col, 55))
+                    self.screen.blit(glow, (x - 12, HIT_Y - _HIT_ZONE_H // 2 - 20))
+                else:
+                    pygame.draw.rect(self.screen, col, rect, border_radius=9)
 
-                # Halo semi-transparent
-                glow = pygame.Surface((_LANE_W + 24, _HIT_ZONE_H + 40), pygame.SRCALPHA)
-                glow.fill((*col, 55))
-                self.screen.blit(glow, (x - 12, HIT_Y - _HIT_ZONE_H // 2 - 20))
-            else:
-                pygame.draw.rect(self.screen, col, rect, border_radius=9)
-
-            # Ligne de référence
-            pygame.draw.line(
-                self.screen, _COL_WHITE,
-                (x, HIT_Y), (x + _LANE_W, HIT_Y), 2
-            )
+                pygame.draw.line(self.screen, _COL_WHITE,
+                                 (x, HIT_Y), (x + lw, HIT_Y), 2)
 
     def _draw_key_labels(self):
-        """Affiche les labels des touches sous les zones de frappe."""
+        """Affiche les labels des touches sous chaque xylophone."""
         if self._difficulty == 'hard':
-            labels = ['←↑↓→', 'R', 'T', 'Y']
+            p1_labels = ['←↑↓→', 'R', 'T', 'Y']
+            p2_labels = ['OKLM', '1', '2', '3']
         else:
-            labels = LANE_KEYS_DISPLAY
-        for i, label in enumerate(labels):
-            x   = _LANE_LEFT + i * (_LANE_W + _LANE_GAP) + _LANE_W // 2
-            col = _COL_WHITE if self._key_pressed[i] else LANE_COLORS[i]
-            txt = self._fonts['info'].render(label, True, col)
-            self.screen.blit(txt, (x - txt.get_width() // 2, HIT_Y + _HIT_ZONE_H // 2 + 8))
+            p1_labels = LANE_KEYS_DISPLAY
+            p2_labels = ['1', '2', '3', '4']
+
+        y = HIT_Y + _HIT_ZONE_H // 2 + 8
+
+        if self._players == 2:
+            left1, lw1, lg1 = self._get_lane_geom(1)
+            for i, label in enumerate(p1_labels):
+                x   = left1 + i * (lw1 + lg1) + lw1 // 2
+                col = _COL_WHITE if self._key_pressed[i] else LANE_COLORS[i]
+                txt = self._fonts['info'].render(label, True, col)
+                self.screen.blit(txt, (x - txt.get_width() // 2, y))
+
+            left2, lw2, lg2 = self._get_lane_geom(2)
+            for i, label in enumerate(p2_labels):
+                x   = left2 + i * (lw2 + lg2) + lw2 // 2
+                col = _COL_WHITE if self._key_pressed_p2[i] else (100, 180, 255)
+                txt = self._fonts['info'].render(label, True, col)
+                self.screen.blit(txt, (x - txt.get_width() // 2, y))
+        else:
+            left, lw, lg = self._get_lane_geom(1)
+            for i, label in enumerate(p1_labels):
+                x   = left + i * (lw + lg) + lw // 2
+                col = _COL_WHITE if self._key_pressed[i] else LANE_COLORS[i]
+                txt = self._fonts['info'].render(label, True, col)
+                self.screen.blit(txt, (x - txt.get_width() // 2, y))
 
     def _draw_judgments(self):
         """Affiche les textes de jugement animés (remontée + fondu)."""
@@ -626,27 +752,90 @@ class GameScene:
             self.screen.blit(surf, (j['x'] - surf.get_width() // 2, j['y']))
 
     def _draw_hud(self):
-        """Affiche le HUD : score et nom de la musique (dans la zone des pistes)."""
-        lane_cx = _LANE_LEFT + _LANE_AREA_W // 2
+        """Affiche le HUD."""
+        if self._players == 2:
+            self._draw_2p_hud()
+            return
 
-        # --- Score ---
+        lane_cx = _LANE_LEFT + _LANE_AREA_W // 2
         sc = self._fonts['score'].render(f"{self.score:,}", True, _COL_WHITE)
         self.screen.blit(sc, (_LANE_LEFT, 10))
-
-        # --- Nom de la musique ---
         name = self._fonts['info'].render(self.music_name, True, (120, 120, 120))
         self.screen.blit(name, (lane_cx - name.get_width() // 2, 55))
 
-    def _draw_side_stats(self):
-        """Affiche les statistiques sur tout le côté droit de l'écran."""
-        panel_x = _LANE_LEFT + _LANE_AREA_W
-        panel_w = self.width - panel_x
-        pad     = 20
-        cx      = panel_x + panel_w // 2
+    def _draw_2p_hud(self):
+        """HUD 2 joueurs : chaque joueur a sa propre moitié d'écran."""
+        font_sc  = pygame.font.Font(None, 52)
+        font_lbl = pygame.font.Font(None, 30)
+        font_st  = pygame.font.Font(None, 24)
 
-        # Fond et bordure gauche
+        # ── Séparateur vertical ──
+        pygame.draw.line(self.screen, (50, 50, 80),
+                         (_SCREEN_W // 2, 0), (_SCREEN_W // 2, self.height), 2)
+
+        # ── Nom de la musique centré ──
+        name = font_st.render(self.music_name, True, (70, 70, 70))
+        self.screen.blit(name, (_SCREEN_W // 2 - name.get_width() // 2, 6))
+
+        players_data = [
+            (1, self.score,    self.health,    self.perfect_count, self.good_count,
+             self.miss_count,  self.max_combo,    _COL_WHITE),
+            (2, self.score_p2, self.health_p2, self.perfect_p2,    self.good_p2,
+             self.miss_p2,     self.max_combo_p2, (100, 180, 255)),
+        ]
+
+        for player, score, health, perfect, good, miss, max_combo, color in players_data:
+            left, lw, lg = self._get_lane_geom(player)
+            area_w = NUM_LANES * lw + (NUM_LANES - 1) * lg
+
+            # ── Label + Score ──
+            lbl_txt = "J1" if player == 1 else "J2"
+            lbl_s   = font_lbl.render(lbl_txt, True, color)
+            sc_s    = font_sc.render(f"{score:,}", True, color)
+            self.screen.blit(lbl_s, (left, 12))
+            self.screen.blit(sc_s,  (left + lbl_s.get_width() + 8, 6))
+
+            # ── Barre de vie au-dessus des pistes ──
+            bar_y  = _LANE_TOP - 24
+            bar_h  = 14
+            h_col  = (_COL_HEALTH_HI if health > 50
+                      else (_COL_HEALTH_MID if health > 25 else _COL_HEALTH_LO))
+            fill_w = int(area_w * health / 100)
+            pygame.draw.rect(self.screen, (40, 40, 40), (left, bar_y, area_w, bar_h), border_radius=7)
+            if fill_w > 0:
+                pygame.draw.rect(self.screen, h_col, (left, bar_y, fill_w, bar_h), border_radius=7)
+            pygame.draw.rect(self.screen, color, (left, bar_y, area_w, bar_h), 1, border_radius=7)
+
+            # ── Stats compactes sous les key labels ──
+            y_st   = HIT_Y + _HIT_ZONE_H // 2 + 40
+            cx     = left + area_w // 2
+            st_txt = f"P:{perfect}  G:{good}  M:{miss}  MAX x{max_combo}"
+            st_s   = font_st.render(st_txt, True, (100, 100, 100))
+            self.screen.blit(st_s, (cx - st_s.get_width() // 2, y_st))
+
+    def _draw_side_stats(self):
+        """Affiche le panneau de statistiques (mode 1 joueur uniquement)."""
+        if self._players == 2:
+            return
+        rx = _LANE_LEFT + _LANE_AREA_W
+        rw = self.width - rx
+        self._draw_panel(rx, rw, "STATS",
+                         self.score, self.combo, self.max_combo,
+                         self.perfect_count, self.good_count, self.miss_count, self.health)
+
+    def _draw_panel(self, panel_x: int, panel_w: int, title: str,
+                    score: int, combo: int, max_combo: int,
+                    perfect: int, good: int, miss: int, health: float):
+        """Dessine un panneau de statistiques à la position et largeur données."""
+        pad = 20
+        cx  = panel_x + panel_w // 2
+        r   = panel_x + panel_w   # bord droit du panneau
+
+        # Fond
         pygame.draw.rect(self.screen, (14, 14, 35), (panel_x, 0, panel_w, self.height))
-        pygame.draw.line(self.screen, (60, 60, 90), (panel_x, 0), (panel_x, self.height), 2)
+        # Bordure intérieure (côté adjacent aux pistes)
+        border_x = panel_x if panel_x > 0 else panel_x + panel_w
+        pygame.draw.line(self.screen, (60, 60, 90), (border_x, 0), (border_x, self.height), 2)
 
         font_title = pygame.font.Font(None, 46)
         font_lbl   = pygame.font.Font(None, 32)
@@ -655,10 +844,17 @@ class GameScene:
 
         # ── Titre ──
         y = 16
-        t = font_title.render("STATS", True, _COL_WHITE)
+        t = font_title.render(title, True, _COL_WHITE)
         self.screen.blit(t, (cx - t.get_width() // 2, y))
         y += t.get_height() + 10
-        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (self.width - pad, y), 1)
+        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (r - pad, y), 1)
+        y += 12
+
+        # ── Score ──
+        sc_s = font_combo.render(f"{score:,}", True, _COL_WHITE)
+        self.screen.blit(sc_s, (cx - sc_s.get_width() // 2, y))
+        y += sc_s.get_height() + 6
+        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (r - pad, y), 1)
         y += 12
 
         # ── Barre de vie ──
@@ -667,10 +863,10 @@ class GameScene:
         y += lbl.get_height() + 4
         bar_w = panel_w - pad * 2
         pygame.draw.rect(self.screen, (40, 40, 40), (panel_x + pad, y, bar_w, 22), border_radius=11)
-        fill_w = int(bar_w * self.health / 100)
-        if self.health > 50:
+        fill_w = int(bar_w * health / 100)
+        if health > 50:
             h_col = _COL_HEALTH_HI
-        elif self.health > 25:
+        elif health > 25:
             h_col = _COL_HEALTH_MID
         else:
             h_col = _COL_HEALTH_LO
@@ -678,13 +874,13 @@ class GameScene:
             pygame.draw.rect(self.screen, h_col, (panel_x + pad, y, fill_w, 22), border_radius=11)
         pygame.draw.rect(self.screen, _COL_GRAY, (panel_x + pad, y, bar_w, 22), 2, border_radius=11)
         y += 22 + 12
-        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (self.width - pad, y), 1)
+        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (r - pad, y), 1)
         y += 12
 
         # ── Combo courant ──
-        if self.combo > 1:
-            multi  = min(4, 1 + self.combo // 10)
-            c_s    = font_combo.render(f"x{self.combo}", True, _COL_PERFECT)
+        if combo > 1:
+            multi = min(4, 1 + combo // 10)
+            c_s   = font_combo.render(f"x{combo}", True, _COL_PERFECT)
             self.screen.blit(c_s, (cx - c_s.get_width() // 2, y))
             y += c_s.get_height() + 2
             if multi > 1:
@@ -693,19 +889,19 @@ class GameScene:
                 y += m_s.get_height() + 4
         else:
             y += 4
-        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (self.width - pad, y), 1)
+        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (r - pad, y), 1)
         y += 12
 
         # ── Statistiques ──
-        total = self.perfect_count + self.good_count + self.miss_count
-        acc   = int((self.perfect_count + self.good_count * 0.5) / total * 100) if total > 0 else 0
+        total = perfect + good + miss
+        acc   = int((perfect + good * 0.5) / total * 100) if total > 0 else 0
 
         rows = [
-            ("PERFECT",   str(self.perfect_count), _COL_PERFECT),
-            ("GOOD",      str(self.good_count),     _COL_GOOD),
-            ("MISS",      str(self.miss_count),      _COL_MISS),
-            ("PRÉCISION", f"{acc} %",               _COL_WHITE),
-            ("MAX COMBO", f"x{self.max_combo}",     _COL_PERFECT),
+            ("PERFECT",   str(perfect),    _COL_PERFECT),
+            ("GOOD",      str(good),        _COL_GOOD),
+            ("MISS",      str(miss),        _COL_MISS),
+            ("PRÉCISION", f"{acc} %",      _COL_WHITE),
+            ("MAX COMBO", f"x{max_combo}", _COL_PERFECT),
         ]
 
         remaining_h = self.height - y
@@ -720,7 +916,7 @@ class GameScene:
             if i < len(rows) - 1:
                 sep_y = y + (i + 1) * row_h
                 pygame.draw.line(self.screen, (35, 35, 60),
-                                 (panel_x + pad, sep_y), (self.width - pad, sep_y), 1)
+                                 (panel_x + pad, sep_y), (r - pad, sep_y), 1)
 
     def _draw_pause_overlay(self):
         """Superpose un écran de pause semi-transparent."""
@@ -743,39 +939,41 @@ class GameScene:
         overlay.fill(_COL_OVERLAY)
         self.screen.blit(overlay, (0, 0))
 
-        # Titre
-        if self.health > 0:
-            title_txt   = "TERMINÉ !"
-            title_color = _COL_PERFECT
+        if self._players == 2:
+            self._draw_result_2p()
         else:
-            title_txt   = "ÉCHEC..."
-            title_color = _COL_MISS
+            self._draw_result_1p()
+
+        hint = self._fonts['info'].render("F  Retour au menu", True, _COL_GRAY)
+        self.screen.blit(hint, (self.width // 2 - hint.get_width() // 2, self.height - 70))
+
+    def _draw_result_1p(self):
+        """Écran de résultat 1 joueur."""
+        if self.health > 0:
+            title_txt, title_color = "TERMINÉ !", _COL_PERFECT
+        else:
+            title_txt, title_color = "ÉCHEC...",  _COL_MISS
 
         title = self._fonts['result'].render(title_txt, True, title_color)
         self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 175))
 
-        # Statistiques
         total = self.perfect_count + self.good_count + self.miss_count
-        acc   = (
-            int((self.perfect_count + self.good_count * 0.5) / total * 100)
-            if total > 0 else 0
-        )
+        acc   = int((self.perfect_count + self.good_count * 0.5) / total * 100) if total > 0 else 0
 
         stats = [
-            (f"Score",          f"{self.score:,}",        _COL_WHITE),
-            (f"Max Combo",      f"x{self.max_combo}",     _COL_WHITE),
-            (f"Précision",      f"{acc} %",               _COL_WHITE),
-            (f"PERFECT",        str(self.perfect_count),  _COL_PERFECT),
-            (f"GOOD",           str(self.good_count),     _COL_GOOD),
-            (f"MISS",           str(self.miss_count),     _COL_MISS),
+            ("Score",     f"{self.score:,}",       _COL_WHITE),
+            ("Max Combo", f"x{self.max_combo}",    _COL_WHITE),
+            ("Précision", f"{acc} %",              _COL_WHITE),
+            ("PERFECT",   str(self.perfect_count), _COL_PERFECT),
+            ("GOOD",      str(self.good_count),    _COL_GOOD),
+            ("MISS",      str(self.miss_count),    _COL_MISS),
         ]
 
         font_lbl = self._fonts['combo']
         font_val = self._fonts['score']
-        y0       = 310
-        row_h    = 68
-        col_lbl  = self.width // 2 - 200
-        col_val  = self.width // 2 + 80
+        y0, row_h = 310, 68
+        col_lbl   = self.width // 2 - 200
+        col_val   = self.width // 2 + 80
 
         for i, (label, value, color) in enumerate(stats):
             lbl_s = font_lbl.render(label, True, _COL_GRAY)
@@ -783,7 +981,55 @@ class GameScene:
             self.screen.blit(lbl_s, (col_lbl - lbl_s.get_width(), y0 + i * row_h))
             self.screen.blit(val_s, (col_val, y0 + i * row_h))
 
-        hint = self._fonts['info'].render(
-            "F  Retour au menu", True, _COL_GRAY
-        )
-        self.screen.blit(hint, (self.width // 2 - hint.get_width() // 2, self.height - 70))
+    def _draw_result_2p(self):
+        """Écran de résultat 2 joueurs avec vainqueur."""
+        # ── Titre / vainqueur ──
+        if self.score > self.score_p2:
+            title_txt, title_color = "J1 GAGNE !", (100, 220, 255)
+        elif self.score_p2 > self.score:
+            title_txt, title_color = "J2 GAGNE !", (100, 220, 255)
+        else:
+            title_txt, title_color = "ÉGALITÉ !",  _COL_PERFECT
+
+        title = self._fonts['result'].render(title_txt, True, title_color)
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 130))
+
+        font_hdr = pygame.font.Font(None, 56)
+        font_lbl = pygame.font.Font(None, 34)
+        font_val = pygame.font.Font(None, 62)
+
+        def col_stats(perfect, good, miss, max_combo, score, health):
+            total = perfect + good + miss
+            acc   = int((perfect + good * 0.5) / total * 100) if total > 0 else 0
+            return [
+                ("Score",     f"{score:,}",    _COL_WHITE),
+                ("Max Combo", f"x{max_combo}", _COL_WHITE),
+                ("Précision", f"{acc} %",      _COL_WHITE),
+                ("PERFECT",   str(perfect),    _COL_PERFECT),
+                ("GOOD",      str(good),       _COL_GOOD),
+                ("MISS",      str(miss),       _COL_MISS),
+            ]
+
+        p1_stats = col_stats(self.perfect_count, self.good_count, self.miss_count,
+                             self.max_combo, self.score, self.health)
+        p2_stats = col_stats(self.perfect_p2, self.good_p2, self.miss_p2,
+                             self.max_combo_p2, self.score_p2, self.health_p2)
+
+        # Deux colonnes : J1 à gauche, J2 à droite
+        cx1 = self.width // 4
+        cx2 = self.width * 3 // 4
+        y0  = 230
+        row_h = 64
+
+        for cx, label, stats in [(cx1, "J1", p1_stats), (cx2, "J2", p2_stats)]:
+            hdr = font_hdr.render(label, True, _COL_WHITE)
+            self.screen.blit(hdr, (cx - hdr.get_width() // 2, y0))
+            pygame.draw.line(self.screen, (80, 80, 120),
+                             (cx - 140, y0 + hdr.get_height() + 4),
+                             (cx + 140, y0 + hdr.get_height() + 4), 1)
+            for i, (name, value, color) in enumerate(stats):
+                y    = y0 + hdr.get_height() + 16 + i * row_h
+                lbl_s = font_lbl.render(name, True, _COL_GRAY)
+                val_s = font_val.render(value, True, color)
+                self.screen.blit(lbl_s, (cx - lbl_s.get_width() // 2, y))
+                self.screen.blit(val_s, (cx - val_s.get_width() // 2, y + lbl_s.get_height() + 2))
