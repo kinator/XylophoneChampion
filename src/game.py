@@ -252,6 +252,7 @@ class GameScene:
             return
 
         # Jeu en cours (playing / paused / result)
+        self._draw_side_stats()
         self._draw_lanes()
         self._draw_notes()
         self._draw_hit_zones()
@@ -518,13 +519,47 @@ class GameScene:
             self.screen.blit(surf, (j['x'] - surf.get_width() // 2, j['y']))
 
     def _draw_hud(self):
-        """Affiche le HUD : score, combo, barre de vie, nom de la musique."""
-        # --- Barre de vie ---
-        bar_w = 380
-        bar_x = self.width // 2 - bar_w // 2
-        bar_y = 18
-        pygame.draw.rect(self.screen, (45, 45, 45), (bar_x, bar_y, bar_w, 22), border_radius=11)
+        """Affiche le HUD : score et nom de la musique (dans la zone des pistes)."""
+        lane_cx = _LANE_LEFT + _LANE_AREA_W // 2
 
+        # --- Score ---
+        sc = self._fonts['score'].render(f"{self.score:,}", True, _COL_WHITE)
+        self.screen.blit(sc, (_LANE_LEFT, 10))
+
+        # --- Nom de la musique ---
+        name = self._fonts['info'].render(self.music_name, True, (120, 120, 120))
+        self.screen.blit(name, (lane_cx - name.get_width() // 2, 55))
+
+    def _draw_side_stats(self):
+        """Affiche les statistiques sur tout le côté droit de l'écran."""
+        panel_x = _LANE_LEFT + _LANE_AREA_W
+        panel_w = self.width - panel_x
+        pad     = 20
+        cx      = panel_x + panel_w // 2
+
+        # Fond et bordure gauche
+        pygame.draw.rect(self.screen, (14, 14, 35), (panel_x, 0, panel_w, self.height))
+        pygame.draw.line(self.screen, (60, 60, 90), (panel_x, 0), (panel_x, self.height), 2)
+
+        font_title = pygame.font.Font(None, 46)
+        font_lbl   = pygame.font.Font(None, 32)
+        font_val   = pygame.font.Font(None, 76)
+        font_combo = pygame.font.Font(None, 58)
+
+        # ── Titre ──
+        y = 16
+        t = font_title.render("STATS", True, _COL_WHITE)
+        self.screen.blit(t, (cx - t.get_width() // 2, y))
+        y += t.get_height() + 10
+        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (self.width - pad, y), 1)
+        y += 12
+
+        # ── Barre de vie ──
+        lbl = font_lbl.render("VIE", True, _COL_GRAY)
+        self.screen.blit(lbl, (cx - lbl.get_width() // 2, y))
+        y += lbl.get_height() + 4
+        bar_w = panel_w - pad * 2
+        pygame.draw.rect(self.screen, (40, 40, 40), (panel_x + pad, y, bar_w, 22), border_radius=11)
         fill_w = int(bar_w * self.health / 100)
         if self.health > 50:
             h_col = _COL_HEALTH_HI
@@ -533,25 +568,52 @@ class GameScene:
         else:
             h_col = _COL_HEALTH_LO
         if fill_w > 0:
-            pygame.draw.rect(self.screen, h_col, (bar_x, bar_y, fill_w, 22), border_radius=11)
-        pygame.draw.rect(self.screen, _COL_GRAY, (bar_x, bar_y, bar_w, 22), 2, border_radius=11)
+            pygame.draw.rect(self.screen, h_col, (panel_x + pad, y, fill_w, 22), border_radius=11)
+        pygame.draw.rect(self.screen, _COL_GRAY, (panel_x + pad, y, bar_w, 22), 2, border_radius=11)
+        y += 22 + 12
+        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (self.width - pad, y), 1)
+        y += 12
 
-        # --- Score ---
-        sc = self._fonts['score'].render(f"{self.score:,}", True, _COL_WHITE)
-        self.screen.blit(sc, (28, 10))
-
-        # --- Combo ---
+        # ── Combo courant ──
         if self.combo > 1:
             multi  = min(4, 1 + self.combo // 10)
-            c_txt  = self._fonts['combo'].render(f"x{self.combo}", True, _COL_PERFECT)
-            m_txt  = self._fonts['info'].render(f"×{multi}", True, _COL_PERFECT) if multi > 1 else None
-            self.screen.blit(c_txt, (self.width - c_txt.get_width() - 28, 10))
-            if m_txt:
-                self.screen.blit(m_txt, (self.width - m_txt.get_width() - 28, 58))
+            c_s    = font_combo.render(f"x{self.combo}", True, _COL_PERFECT)
+            self.screen.blit(c_s, (cx - c_s.get_width() // 2, y))
+            y += c_s.get_height() + 2
+            if multi > 1:
+                m_s = font_lbl.render(f"×{multi} multiplicateur", True, _COL_PERFECT)
+                self.screen.blit(m_s, (cx - m_s.get_width() // 2, y))
+                y += m_s.get_height() + 4
+        else:
+            y += 4
+        pygame.draw.line(self.screen, (60, 60, 90), (panel_x + pad, y), (self.width - pad, y), 1)
+        y += 12
 
-        # --- Nom de la musique ---
-        name = self._fonts['info'].render(self.music_name, True, (120, 120, 120))
-        self.screen.blit(name, (self.width // 2 - name.get_width() // 2, 48))
+        # ── Statistiques ──
+        total = self.perfect_count + self.good_count + self.miss_count
+        acc   = int((self.perfect_count + self.good_count * 0.5) / total * 100) if total > 0 else 0
+
+        rows = [
+            ("PERFECT",   str(self.perfect_count), _COL_PERFECT),
+            ("GOOD",      str(self.good_count),     _COL_GOOD),
+            ("MISS",      str(self.miss_count),      _COL_MISS),
+            ("PRÉCISION", f"{acc} %",               _COL_WHITE),
+            ("MAX COMBO", f"x{self.max_combo}",     _COL_PERFECT),
+        ]
+
+        remaining_h = self.height - y
+        row_h       = remaining_h // len(rows)
+
+        for i, (label, value, color) in enumerate(rows):
+            cy    = y + i * row_h + row_h // 2
+            lbl_s = font_lbl.render(label, True, _COL_GRAY)
+            val_s = font_val.render(value, True, color)
+            self.screen.blit(lbl_s, (cx - lbl_s.get_width() // 2, cy - lbl_s.get_height() // 2 - 18))
+            self.screen.blit(val_s, (cx - val_s.get_width() // 2, cy - val_s.get_height() // 2 + 10))
+            if i < len(rows) - 1:
+                sep_y = y + (i + 1) * row_h
+                pygame.draw.line(self.screen, (35, 35, 60),
+                                 (panel_x + pad, sep_y), (self.width - pad, sep_y), 1)
 
     def _draw_pause_overlay(self):
         """Superpose un écran de pause semi-transparent."""
@@ -588,7 +650,7 @@ class GameScene:
         # Statistiques
         total = self.perfect_count + self.good_count + self.miss_count
         acc   = (
-            int((self.perfect_count + self.good_count) / total * 100)
+            int((self.perfect_count + self.good_count * 0.5) / total * 100)
             if total > 0 else 0
         )
 
