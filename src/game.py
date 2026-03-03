@@ -927,6 +927,7 @@ class GameScene:
         acc   = int((perfect + good * 0.5) / total * 100) if total > 0 else 0
 
         rows = [
+            ("SCORE",     f"{score:,}",    _COL_WHITE),
             ("MAX COMBO", f"x{max_combo}", _COL_PERFECT),
             ("PRÉCISION", f"{acc} %",      _COL_WHITE),
             ("PERFECT",   str(perfect),    _COL_PERFECT),
@@ -991,6 +992,7 @@ class GameScene:
         acc   = int((self.perfect_count + self.good_count * 0.5) / total * 100) if total > 0 else 0
 
         stats = [
+            ("Score",     f"{self.score:,}",       _COL_WHITE),
             ("Max Combo", f"x{self.max_combo}",    _COL_WHITE),
             ("Précision", f"{acc} %",              _COL_WHITE),
             ("Perfect",   str(self.perfect_count), _COL_PERFECT),
@@ -1031,6 +1033,7 @@ class GameScene:
             total = perfect + good + miss
             acc   = int((perfect + good * 0.5) / total * 100) if total > 0 else 0
             return [
+                ("Score",     f"{score:,}",    _COL_WHITE),
                 ("Max Combo", f"x{max_combo}", _COL_WHITE),
                 ("Précision", f"{acc} %",      _COL_WHITE),
                 ("Perfect",   str(perfect),    _COL_PERFECT),
