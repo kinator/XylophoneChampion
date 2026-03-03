@@ -708,10 +708,34 @@ class GameScene:
                 pygame.draw.line(self.screen, _COL_WHITE,
                                  (x, HIT_Y), (x + lw, HIT_Y), 2)
 
+    def _draw_mini_arrows(self, cx: int, cy: int, color: tuple):
+        """Dessine 4 petites flèches directionnelles (↑ ↓ ← →) centrées en (cx, cy)."""
+        s = 7   # demi-taille d'une flèche
+        g = 4   # écart entre flèches adjacentes
+        arrows = [
+            # (direction, centre_x_offset, centre_y_offset)
+            ('up',    0,    -(s + g)),
+            ('down',  0,     (s + g)),
+            ('left',  -(s + g), 0),
+            ('right',  (s + g), 0),
+        ]
+        for direction, dx, dy in arrows:
+            ax, ay = cx + dx, cy + dy
+            if direction == 'up':
+                pts = [(ax, ay - s), (ax - s, ay + s), (ax + s, ay + s)]
+            elif direction == 'down':
+                pts = [(ax, ay + s), (ax - s, ay - s), (ax + s, ay - s)]
+            elif direction == 'left':
+                pts = [(ax - s, ay), (ax + s, ay - s), (ax + s, ay + s)]
+            else:  # right
+                pts = [(ax + s, ay), (ax - s, ay - s), (ax - s, ay + s)]
+            pygame.draw.polygon(self.screen, color, pts)
+            pygame.draw.polygon(self.screen, (0, 0, 0), pts, 1)
+
     def _draw_key_labels(self):
         """Affiche les labels des touches sous chaque xylophone."""
         if self._difficulty == 'hard':
-            p1_labels = ['←↑↓→', 'R', 'T', 'Y']
+            p1_labels = [None, 'R', 'T', 'Y']   # None → flèches dessinées pour lane 0
             p2_labels = ['OKLM', '1', '2', '3']
         else:
             p1_labels = LANE_KEYS_DISPLAY
@@ -724,8 +748,11 @@ class GameScene:
             for i, label in enumerate(p1_labels):
                 x   = left1 + i * (lw1 + lg1) + lw1 // 2
                 col = _COL_WHITE if self._key_pressed[i] else LANE_COLORS[i]
-                txt = self._fonts['info'].render(label, True, col)
-                self.screen.blit(txt, (x - txt.get_width() // 2, y))
+                if label is None:
+                    self._draw_mini_arrows(x, y + 14, col)
+                else:
+                    txt = self._fonts['info'].render(label, True, col)
+                    self.screen.blit(txt, (x - txt.get_width() // 2, y))
 
             left2, lw2, lg2 = self._get_lane_geom(2)
             for i, label in enumerate(p2_labels):
@@ -738,8 +765,11 @@ class GameScene:
             for i, label in enumerate(p1_labels):
                 x   = left + i * (lw + lg) + lw // 2
                 col = _COL_WHITE if self._key_pressed[i] else LANE_COLORS[i]
-                txt = self._fonts['info'].render(label, True, col)
-                self.screen.blit(txt, (x - txt.get_width() // 2, y))
+                if label is None:
+                    self._draw_mini_arrows(x, y + 14, col)
+                else:
+                    txt = self._fonts['info'].render(label, True, col)
+                    self.screen.blit(txt, (x - txt.get_width() // 2, y))
 
     def _draw_judgments(self):
         """Affiche les textes de jugement animés (remontée + fondu)."""
@@ -897,11 +927,11 @@ class GameScene:
         acc   = int((perfect + good * 0.5) / total * 100) if total > 0 else 0
 
         rows = [
+            ("MAX COMBO", f"x{max_combo}", _COL_PERFECT),
+            ("PRÉCISION", f"{acc} %",      _COL_WHITE),
             ("PERFECT",   str(perfect),    _COL_PERFECT),
             ("GOOD",      str(good),        _COL_GOOD),
-            ("MISS",      str(miss),        _COL_MISS),
-            ("PRÉCISION", f"{acc} %",      _COL_WHITE),
-            ("MAX COMBO", f"x{max_combo}", _COL_PERFECT),
+            ("MANQUÉ",    str(miss),        _COL_MISS),
         ]
 
         remaining_h = self.height - y
@@ -961,12 +991,11 @@ class GameScene:
         acc   = int((self.perfect_count + self.good_count * 0.5) / total * 100) if total > 0 else 0
 
         stats = [
-            ("Score",     f"{self.score:,}",       _COL_WHITE),
             ("Max Combo", f"x{self.max_combo}",    _COL_WHITE),
             ("Précision", f"{acc} %",              _COL_WHITE),
-            ("PERFECT",   str(self.perfect_count), _COL_PERFECT),
-            ("GOOD",      str(self.good_count),    _COL_GOOD),
-            ("MISS",      str(self.miss_count),    _COL_MISS),
+            ("Perfect",   str(self.perfect_count), _COL_PERFECT),
+            ("Good",      str(self.good_count),    _COL_GOOD),
+            ("Manqué",    str(self.miss_count),    _COL_MISS),
         ]
 
         font_lbl = self._fonts['combo']
@@ -1002,12 +1031,11 @@ class GameScene:
             total = perfect + good + miss
             acc   = int((perfect + good * 0.5) / total * 100) if total > 0 else 0
             return [
-                ("Score",     f"{score:,}",    _COL_WHITE),
                 ("Max Combo", f"x{max_combo}", _COL_WHITE),
                 ("Précision", f"{acc} %",      _COL_WHITE),
-                ("PERFECT",   str(perfect),    _COL_PERFECT),
-                ("GOOD",      str(good),       _COL_GOOD),
-                ("MISS",      str(miss),       _COL_MISS),
+                ("Perfect",   str(perfect),    _COL_PERFECT),
+                ("Good",      str(good),       _COL_GOOD),
+                ("Manqué",    str(miss),       _COL_MISS),
             ]
 
         p1_stats = col_stats(self.perfect_count, self.good_count, self.miss_count,
