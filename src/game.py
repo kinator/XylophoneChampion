@@ -104,6 +104,7 @@ _COL_HEALTH_MID  = (220, 180,  50)
 _COL_HEALTH_LO   = (200,  50,  50)
 _COL_PERFECT     = (255, 220,  50)
 _COL_GOOD        = (100, 200, 255)
+_COL_POOR        = (200, 150, 100)
 _COL_MISS        = (200,  50,  50)
 _COL_OVERLAY     = (  0,   0,   0, 160)
 
@@ -151,6 +152,7 @@ class GameScene:
         self.max_combo     = 0
         self.perfect_count = 0
         self.good_count    = 0
+        self.poor_count    = 0
         self.miss_count    = 0
         self.health        = 100.0
 
@@ -160,6 +162,7 @@ class GameScene:
         self.max_combo_p2  = 0
         self.perfect_p2    = 0
         self.good_p2       = 0
+        self.poor_p2       = 0
         self.miss_p2       = 0
         self.health_p2     = 100.0
 
@@ -506,7 +509,7 @@ class GameScene:
         Enregistre un coup réussi et met à jour score / combo.
 
         Args:
-            judgment: 'perfect', 'good' ou 'poor'.
+            judgment: 'perfect', 'good', 'poor' ou 'miss'.
             lane:     Piste concernée.
             player:   Numéro du joueur (1 ou 2).
         """
@@ -517,8 +520,10 @@ class GameScene:
             self.score     += JUDGMENT_POINTS[judgment] * multiplier
             if judgment == 'perfect':
                 self.perfect_count += 1
-            else:
+            elif judgment == 'good':
                 self.good_count += 1
+            elif judgment == 'poor':
+                self.poor_count += 1
         else:
             self.combo_p2     += 1
             self.max_combo_p2  = max(self.max_combo_p2, self.combo_p2)
@@ -526,10 +531,19 @@ class GameScene:
             self.score_p2     += JUDGMENT_POINTS[judgment] * multiplier
             if judgment == 'perfect':
                 self.perfect_p2 += 1
-            else:
+            elif judgment == 'good':
                 self.good_p2 += 1
+            elif judgment == 'poor':
+                self.poor_p2 += 1
 
-        color = _COL_PERFECT if judgment == 'perfect' else _COL_GOOD
+        if judgment == 'perfect':
+            color = _COL_PERFECT
+        elif judgment == 'good':
+            color = _COL_GOOD
+        elif judgment == 'poor':
+            color = _COL_POOR
+        else:
+            color = _COL_MISS
         self._spawn_judgment(judgment.upper(), lane, color, player)
 
     def _register_miss(self, note: Note, player: int = 1):
@@ -781,12 +795,12 @@ class GameScene:
 
         players_data = [
             (1, self.score,    self.health,    self.perfect_count, self.good_count,
-             self.miss_count,  self.max_combo,    _COL_WHITE),
+             self.poor_count,  self.miss_count,  self.max_combo,    _COL_WHITE),
             (2, self.score_p2, self.health_p2, self.perfect_p2,    self.good_p2,
-             self.miss_p2,     self.max_combo_p2, (100, 180, 255)),
+             self.poor_p2,     self.miss_p2,     self.max_combo_p2, (100, 180, 255)),
         ]
 
-        for player, score, health, perfect, good, miss, max_combo, color in players_data:
+        for player, score, health, perfect, good, poor, miss, max_combo, color in players_data:
             left, lw, lg = self._get_lane_geom(player)
             area_w = NUM_LANES * lw + (NUM_LANES - 1) * lg
 
@@ -811,7 +825,7 @@ class GameScene:
             # ── Stats compactes sous les key labels ──
             y_st   = HIT_Y + _HIT_ZONE_H // 2 + 40
             cx     = left + area_w // 2
-            st_txt = f"P:{perfect}  G:{good}  M:{miss}  MAX x{max_combo}"
+            st_txt = f"P:{perfect}  G:{good}  O:{poor}  M:{miss}  MAX x{max_combo}"
             st_s   = font_st.render(st_txt, True, (100, 100, 100))
             self.screen.blit(st_s, (cx - st_s.get_width() // 2, y_st))
 
@@ -823,11 +837,11 @@ class GameScene:
         rw = self.width - rx
         self._draw_panel(rx, rw, "STATS",
                          self.score, self.combo, self.max_combo,
-                         self.perfect_count, self.good_count, self.miss_count, self.health)
+                         self.perfect_count, self.good_count, self.poor_count, self.miss_count, self.health)
 
     def _draw_panel(self, panel_x: int, panel_w: int, title: str,
                     score: int, combo: int, max_combo: int,
-                    perfect: int, good: int, miss: int, health: float):
+                    perfect: int, good: int, poor: int, miss: int, health: float):
         """Dessine un panneau de statistiques à la position et largeur données."""
         pad = 20
         cx  = panel_x + panel_w // 2
@@ -895,12 +909,13 @@ class GameScene:
         y += 12
 
         # ── Statistiques ──
-        total = perfect + good + miss
-        acc   = int((perfect + good * 0.5) / total * 100) if total > 0 else 0
+        total = perfect + good + poor + miss
+        acc   = int((perfect + good * 0.5 + poor * 0.25) / total * 100) if total > 0 else 0
 
         rows = [
             ("PERFECT",   str(perfect),    _COL_PERFECT),
             ("GOOD",      str(good),        _COL_GOOD),
+            ("POOR",      str(poor),        _COL_POOR),
             ("MISS",      str(miss),        _COL_MISS),
             ("PRÉCISION", f"{acc} %",      _COL_WHITE),
             ("MAX COMBO", f"x{max_combo}", _COL_PERFECT),
