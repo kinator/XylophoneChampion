@@ -207,4 +207,4 @@ marimo/_lsp/
 __marimo__/
 
 # Xylophone Champion — caches d'analyse audio (régénérés automatiquement)
-cache/*.json
+# cache/*.json
