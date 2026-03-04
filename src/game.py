@@ -26,7 +26,7 @@ from note import (
     DIRECTION_ARROWS,
 )
 from analyzer import analyze_music
-from constants import KEY_ACCEPT
+from constants import *
 
 # ------------------------------------------------------------------
 # Constantes de mise en page
@@ -51,27 +51,29 @@ _COUNTDOWN   = 3.0
 _TIME_VISIBLE = HIT_Y / FALL_SPEED   # ≈ 2.07 s
 
 # Touches par défaut (mode normal) : R T Y H
-_LANE_KEYS = [pygame.K_r, pygame.K_t, pygame.K_y, pygame.K_h]
+_P1_LANE_KEYS = [KEY_COLUMN_1_1, KEY_COLUMN_1_2, KEY_COLUMN_1_3, KEY_COLUMN_1_4]
 
 # Mode difficile : R T Y pour les pistes 1-2-3, flèches pour la piste 0
-_HARD_LANE_KEYS = [pygame.K_r, pygame.K_t, pygame.K_y]   # → pistes 1, 2, 3
-_ARROW_KEYS = {
-    pygame.K_UP:    'up',
-    pygame.K_DOWN:  'down',
-    pygame.K_LEFT:  'left',
-    pygame.K_RIGHT: 'right',
+_P1_HARD_LANE_KEYS = [KEY_COLUMN_1_1, KEY_COLUMN_1_2, KEY_COLUMN_1_3]   # → pistes 1, 2, 3
+# _ARROW_KEYS
+_P1_ARROW_KEYS = {
+    KEY_UP_1:    'up',
+    KEY_DOWN_1:  'down',
+    KEY_LEFT_1:  'left',
+    KEY_RIGHT_1: 'right',
 }
 
 # Touches Joueur 2 — mode normal : 1 2 3 4
-_P2_LANE_KEYS      = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]
+_P2_LANE_KEYS      = [KEY_COLUMN_2_1, KEY_COLUMN_2_2, KEY_COLUMN_2_3, KEY_COLUMN_2_4]
 # Touches Joueur 2 — mode difficile : pistes 1-2-3
-_P2_HARD_LANE_KEYS = [pygame.K_1, pygame.K_2, pygame.K_3]
+_P2_HARD_LANE_KEYS = [KEY_COLUMN_2_1, KEY_COLUMN_2_2, KEY_COLUMN_2_3]
 # Touches Joueur 2 — mode difficile, piste 0 : O K L M
-_P2_WASD_KEYS = {
-    pygame.K_o: 'up',
-    pygame.K_k: 'left',
-    pygame.K_l: 'right',
-    pygame.K_m: 'down',
+# _P2_WASD_KEYS
+_P2_ARROW_KEYS = {
+    KEY_UP_2:    'up',
+    KEY_DOWN_2:  'down',
+    KEY_LEFT_2:  'left',
+    KEY_RIGHT_2: 'right',
 }
 
 # Mode 2 joueurs — chaque joueur a son propre demi-écran (640 px de large)
@@ -196,12 +198,12 @@ class GameScene:
         """
         if event.type == pygame.KEYDOWN:
             # Retour menu
-            if event.key == constants.KEY_MENU:
+            if event.key == KEY_MENU:
                 pygame.mixer.music.stop()
                 return {'action': 'menu'}
 
             # Pause / reprise
-            if event.key == constants.KEY_PAUSE:
+            if event.key == KEY_PAUSE:
                 if self._state == 'playing':
                     self._pause()
                 elif self._state == 'paused':
@@ -210,26 +212,26 @@ class GameScene:
             # Frappe de piste — Joueur 1
             if self._state == 'playing':
                 if self._difficulty == 'hard':
-                    if event.key in _ARROW_KEYS:
+                    if event.key in _P1_ARROW_KEYS:
                         self._key_pressed[0] = True
                         self._key_flash[0]   = 12
-                        self._press_lane_arrow(_ARROW_KEYS[event.key], player=1)
+                        self._press_lane_arrow(_P1_ARROW_KEYS[event.key], player=1)
                     else:
-                        for i, key in enumerate(_HARD_LANE_KEYS):
+                        for i, key in enumerate(_P1_HARD_LANE_KEYS):
                             if event.key == key:
                                 self._press_lane(i + 1, player=1)
                 else:
-                    for i, key in enumerate(_LANE_KEYS):
+                    for i, key in enumerate(_P1_LANE_KEYS):
                         if event.key == key:
                             self._press_lane(i, player=1)
 
             # Frappe de piste — Joueur 2
             if self._state == 'playing' and self._players == 2:
                 if self._difficulty == 'hard':
-                    if event.key in _P2_WASD_KEYS:
+                    if event.key in _P2_ARROW_KEYS:
                         self._key_pressed_p2[0] = True
                         self._key_flash_p2[0]   = 12
-                        self._press_lane_arrow(_P2_WASD_KEYS[event.key], player=2)
+                        self._press_lane_arrow(_P2_ARROW_KEYS[event.key], player=2)
                     else:
                         for i, key in enumerate(_P2_HARD_LANE_KEYS):
                             if event.key == key:
@@ -246,21 +248,21 @@ class GameScene:
         if event.type == pygame.KEYUP:
             # Joueur 1
             if self._difficulty == 'hard':
-                if event.key in _ARROW_KEYS:
+                if event.key in _P1_ARROW_KEYS:
                     self._key_pressed[0] = False
                 else:
-                    for i, key in enumerate(_HARD_LANE_KEYS):
+                    for i, key in enumerate(_P1_HARD_LANE_KEYS):
                         if event.key == key:
                             self._key_pressed[i + 1] = False
             else:
-                for i, key in enumerate(_LANE_KEYS):
+                for i, key in enumerate(_P1_LANE_KEYS):
                     if event.key == key:
                         self._key_pressed[i] = False
 
             # Joueur 2
             if self._players == 2:
                 if self._difficulty == 'hard':
-                    if event.key in _P2_WASD_KEYS:
+                    if event.key in _P2_ARROW_KEYS:
                         self._key_pressed_p2[0] = False
                     else:
                         for i, key in enumerate(_P2_HARD_LANE_KEYS):
