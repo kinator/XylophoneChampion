@@ -948,14 +948,10 @@ class GameScene:
             ("PRÉCISION", f"{acc} %",      _COL_WHITE),
             ("PERFECT",   str(perfect),    _COL_PERFECT),
             ("GOOD",      str(good),        _COL_GOOD),
-<<<<<<< HEAD
-            ("MANQUÉ",    str(miss),        _COL_MISS),
-=======
             ("POOR",      str(poor),        _COL_POOR),
             ("MISS",      str(miss),        _COL_MISS),
             ("PRÉCISION", f"{acc} %",      _COL_WHITE),
             ("MAX COMBO", f"x{max_combo}", _COL_PERFECT),
->>>>>>> constant_player_keys
         ]
 
         remaining_h = self.height - y
