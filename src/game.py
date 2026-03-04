@@ -26,7 +26,7 @@ from note import (
     DIRECTION_ARROWS,
 )
 from analyzer import analyze_music
-from constants import KEY_ACCEPT
+from constants import *
 
 # ------------------------------------------------------------------
 # Constantes de mise en page
@@ -51,27 +51,29 @@ _COUNTDOWN   = 3.0
 _TIME_VISIBLE = HIT_Y / FALL_SPEED   # ≈ 2.07 s
 
 # Touches par défaut (mode normal) : R T Y H
-_LANE_KEYS = [pygame.K_r, pygame.K_t, pygame.K_y, pygame.K_h]
+_P1_LANE_KEYS = [KEY_COLUMN_1_1, KEY_COLUMN_1_2, KEY_COLUMN_1_3, KEY_COLUMN_1_4]
 
 # Mode difficile : R T Y pour les pistes 1-2-3, flèches pour la piste 0
-_HARD_LANE_KEYS = [pygame.K_r, pygame.K_t, pygame.K_y]   # → pistes 1, 2, 3
-_ARROW_KEYS = {
-    pygame.K_UP:    'up',
-    pygame.K_DOWN:  'down',
-    pygame.K_LEFT:  'left',
-    pygame.K_RIGHT: 'right',
+_P1_HARD_LANE_KEYS = [KEY_COLUMN_1_1, KEY_COLUMN_1_2, KEY_COLUMN_1_3]   # → pistes 1, 2, 3
+# _ARROW_KEYS
+_P1_ARROW_KEYS = {
+    KEY_UP_1:    'up',
+    KEY_DOWN_1:  'down',
+    KEY_LEFT_1:  'left',
+    KEY_RIGHT_1: 'right',
 }
 
 # Touches Joueur 2 — mode normal : 1 2 3 4
-_P2_LANE_KEYS      = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]
+_P2_LANE_KEYS      = [KEY_COLUMN_2_1, KEY_COLUMN_2_2, KEY_COLUMN_2_3, KEY_COLUMN_2_4]
 # Touches Joueur 2 — mode difficile : pistes 1-2-3
-_P2_HARD_LANE_KEYS = [pygame.K_1, pygame.K_2, pygame.K_3]
+_P2_HARD_LANE_KEYS = [KEY_COLUMN_2_1, KEY_COLUMN_2_2, KEY_COLUMN_2_3]
 # Touches Joueur 2 — mode difficile, piste 0 : O K L M
-_P2_WASD_KEYS = {
-    pygame.K_o: 'up',
-    pygame.K_k: 'left',
-    pygame.K_l: 'right',
-    pygame.K_m: 'down',
+# _P2_WASD_KEYS
+_P2_ARROW_KEYS = {
+    KEY_UP_2:    'up',
+    KEY_DOWN_2:  'down',
+    KEY_LEFT_2:  'left',
+    KEY_RIGHT_2: 'right',
 }
 
 # Mode 2 joueurs — chaque joueur a son propre demi-écran (640 px de large)
@@ -102,6 +104,7 @@ _COL_HEALTH_MID  = (220, 180,  50)
 _COL_HEALTH_LO   = (200,  50,  50)
 _COL_PERFECT     = (255, 220,  50)
 _COL_GOOD        = (100, 200, 255)
+_COL_POOR        = (200, 150, 100)
 _COL_MISS        = (200,  50,  50)
 _COL_OVERLAY     = (  0,   0,   0, 160)
 
@@ -149,6 +152,7 @@ class GameScene:
         self.max_combo     = 0
         self.perfect_count = 0
         self.good_count    = 0
+        self.poor_count    = 0
         self.miss_count    = 0
         self.health        = 100.0
 
@@ -158,6 +162,7 @@ class GameScene:
         self.max_combo_p2  = 0
         self.perfect_p2    = 0
         self.good_p2       = 0
+        self.poor_p2       = 0
         self.miss_p2       = 0
         self.health_p2     = 100.0
 
@@ -196,12 +201,12 @@ class GameScene:
         """
         if event.type == pygame.KEYDOWN:
             # Retour menu
-            if event.key == constants.KEY_MENU:
+            if event.key == KEY_MENU:
                 pygame.mixer.music.stop()
                 return {'action': 'menu'}
 
             # Pause / reprise
-            if event.key == constants.KEY_PAUSE:
+            if event.key == KEY_PAUSE:
                 if self._state == 'playing':
                     self._pause()
                 elif self._state == 'paused':
@@ -210,26 +215,26 @@ class GameScene:
             # Frappe de piste — Joueur 1
             if self._state == 'playing':
                 if self._difficulty == 'hard':
-                    if event.key in _ARROW_KEYS:
+                    if event.key in _P1_ARROW_KEYS:
                         self._key_pressed[0] = True
                         self._key_flash[0]   = 12
-                        self._press_lane_arrow(_ARROW_KEYS[event.key], player=1)
+                        self._press_lane_arrow(_P1_ARROW_KEYS[event.key], player=1)
                     else:
-                        for i, key in enumerate(_HARD_LANE_KEYS):
+                        for i, key in enumerate(_P1_HARD_LANE_KEYS):
                             if event.key == key:
                                 self._press_lane(i + 1, player=1)
                 else:
-                    for i, key in enumerate(_LANE_KEYS):
+                    for i, key in enumerate(_P1_LANE_KEYS):
                         if event.key == key:
                             self._press_lane(i, player=1)
 
             # Frappe de piste — Joueur 2
             if self._state == 'playing' and self._players == 2:
                 if self._difficulty == 'hard':
-                    if event.key in _P2_WASD_KEYS:
+                    if event.key in _P2_ARROW_KEYS:
                         self._key_pressed_p2[0] = True
                         self._key_flash_p2[0]   = 12
-                        self._press_lane_arrow(_P2_WASD_KEYS[event.key], player=2)
+                        self._press_lane_arrow(_P2_ARROW_KEYS[event.key], player=2)
                     else:
                         for i, key in enumerate(_P2_HARD_LANE_KEYS):
                             if event.key == key:
@@ -246,21 +251,21 @@ class GameScene:
         if event.type == pygame.KEYUP:
             # Joueur 1
             if self._difficulty == 'hard':
-                if event.key in _ARROW_KEYS:
+                if event.key in _P1_ARROW_KEYS:
                     self._key_pressed[0] = False
                 else:
-                    for i, key in enumerate(_HARD_LANE_KEYS):
+                    for i, key in enumerate(_P1_HARD_LANE_KEYS):
                         if event.key == key:
                             self._key_pressed[i + 1] = False
             else:
-                for i, key in enumerate(_LANE_KEYS):
+                for i, key in enumerate(_P1_LANE_KEYS):
                     if event.key == key:
                         self._key_pressed[i] = False
 
             # Joueur 2
             if self._players == 2:
                 if self._difficulty == 'hard':
-                    if event.key in _P2_WASD_KEYS:
+                    if event.key in _P2_ARROW_KEYS:
                         self._key_pressed_p2[0] = False
                     else:
                         for i, key in enumerate(_P2_HARD_LANE_KEYS):
@@ -504,7 +509,7 @@ class GameScene:
         Enregistre un coup réussi et met à jour score / combo.
 
         Args:
-            judgment: 'perfect', 'good' ou 'poor'.
+            judgment: 'perfect', 'good', 'poor' ou 'miss'.
             lane:     Piste concernée.
             player:   Numéro du joueur (1 ou 2).
         """
@@ -515,8 +520,10 @@ class GameScene:
             self.score     += JUDGMENT_POINTS[judgment] * multiplier
             if judgment == 'perfect':
                 self.perfect_count += 1
-            else:
+            elif judgment == 'good':
                 self.good_count += 1
+            elif judgment == 'poor':
+                self.poor_count += 1
         else:
             self.combo_p2     += 1
             self.max_combo_p2  = max(self.max_combo_p2, self.combo_p2)
@@ -524,10 +531,19 @@ class GameScene:
             self.score_p2     += JUDGMENT_POINTS[judgment] * multiplier
             if judgment == 'perfect':
                 self.perfect_p2 += 1
-            else:
+            elif judgment == 'good':
                 self.good_p2 += 1
+            elif judgment == 'poor':
+                self.poor_p2 += 1
 
-        color = _COL_PERFECT if judgment == 'perfect' else _COL_GOOD
+        if judgment == 'perfect':
+            color = _COL_PERFECT
+        elif judgment == 'good':
+            color = _COL_GOOD
+        elif judgment == 'poor':
+            color = _COL_POOR
+        else:
+            color = _COL_MISS
         self._spawn_judgment(judgment.upper(), lane, color, player)
 
     def _register_miss(self, note: Note, player: int = 1):
@@ -809,12 +825,12 @@ class GameScene:
 
         players_data = [
             (1, self.score,    self.health,    self.perfect_count, self.good_count,
-             self.miss_count,  self.max_combo,    _COL_WHITE),
+             self.poor_count,  self.miss_count,  self.max_combo,    _COL_WHITE),
             (2, self.score_p2, self.health_p2, self.perfect_p2,    self.good_p2,
-             self.miss_p2,     self.max_combo_p2, (100, 180, 255)),
+             self.poor_p2,     self.miss_p2,     self.max_combo_p2, (100, 180, 255)),
         ]
 
-        for player, score, health, perfect, good, miss, max_combo, color in players_data:
+        for player, score, health, perfect, good, poor, miss, max_combo, color in players_data:
             left, lw, lg = self._get_lane_geom(player)
             area_w = NUM_LANES * lw + (NUM_LANES - 1) * lg
 
@@ -839,7 +855,7 @@ class GameScene:
             # ── Stats compactes sous les key labels ──
             y_st   = HIT_Y + _HIT_ZONE_H // 2 + 40
             cx     = left + area_w // 2
-            st_txt = f"P:{perfect}  G:{good}  M:{miss}  MAX x{max_combo}"
+            st_txt = f"P:{perfect}  G:{good}  O:{poor}  M:{miss}  MAX x{max_combo}"
             st_s   = font_st.render(st_txt, True, (100, 100, 100))
             self.screen.blit(st_s, (cx - st_s.get_width() // 2, y_st))
 
@@ -851,11 +867,11 @@ class GameScene:
         rw = self.width - rx
         self._draw_panel(rx, rw, "STATS",
                          self.score, self.combo, self.max_combo,
-                         self.perfect_count, self.good_count, self.miss_count, self.health)
+                         self.perfect_count, self.good_count, self.poor_count, self.miss_count, self.health)
 
     def _draw_panel(self, panel_x: int, panel_w: int, title: str,
                     score: int, combo: int, max_combo: int,
-                    perfect: int, good: int, miss: int, health: float):
+                    perfect: int, good: int, poor: int, miss: int, health: float):
         """Dessine un panneau de statistiques à la position et largeur données."""
         pad = 20
         cx  = panel_x + panel_w // 2
@@ -923,8 +939,8 @@ class GameScene:
         y += 12
 
         # ── Statistiques ──
-        total = perfect + good + miss
-        acc   = int((perfect + good * 0.5) / total * 100) if total > 0 else 0
+        total = perfect + good + poor + miss
+        acc   = int((perfect + good * 0.5 + poor * 0.25) / total * 100) if total > 0 else 0
 
         rows = [
             ("SCORE",     f"{score:,}",    _COL_WHITE),
@@ -932,7 +948,14 @@ class GameScene:
             ("PRÉCISION", f"{acc} %",      _COL_WHITE),
             ("PERFECT",   str(perfect),    _COL_PERFECT),
             ("GOOD",      str(good),        _COL_GOOD),
+<<<<<<< HEAD
             ("MANQUÉ",    str(miss),        _COL_MISS),
+=======
+            ("POOR",      str(poor),        _COL_POOR),
+            ("MISS",      str(miss),        _COL_MISS),
+            ("PRÉCISION", f"{acc} %",      _COL_WHITE),
+            ("MAX COMBO", f"x{max_combo}", _COL_PERFECT),
+>>>>>>> constant_player_keys
         ]
 
         remaining_h = self.height - y
