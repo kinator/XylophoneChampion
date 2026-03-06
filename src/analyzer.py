@@ -15,10 +15,10 @@ import hashlib
 from note import NUM_LANES
 
 # Écart minimum (secondes) entre deux notes dans la même piste
-_MIN_GAP_LANE = 0.25
+_MIN_GAP_LANE = 0.08
 
 # Écart minimum (secondes) entre deux notes consécutives (toutes pistes)
-_MIN_GAP_GLOBAL = 0.08
+_MIN_GAP_GLOBAL = 0.03
 
 
 def _cache_path(music_path: str, cache_dir: str) -> str:
@@ -95,57 +95,55 @@ def analyze_music(
     tempo_arr, _ = librosa.beat.beat_track(y=y, sr=sr)
     tempo = float(tempo_arr[0]) if hasattr(tempo_arr, '__len__') else float(tempo_arr)
 
-    # Détection des onsets (optimized for speed)
+    # Détection des onsets — seuils bas pour capturer les pièces rapides (ex: Rush E)
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     onset_frames = librosa.onset.onset_detect(
         onset_envelope=onset_env,
         sr=sr,
         units='frames',
-        delta=0.25,   # seuil : plus haut = moins de notes
-        wait=6,       # frames minimum entre deux onsets (~130 ms à sr=22050)
-        backtrack=False,  # skip backtracking for faster processing
+        delta=0.10,   # seuil : plus haut = moins de notes
+        wait=2,       # frames minimum entre deux onsets (~46 ms à sr=22050)
+        backtrack=False,
     )
     onset_times = librosa.frames_to_time(onset_frames, sr=sr)
 
-    # CQT pour l'analyse fréquentielle (20 bins = sufficient for 5 lanes)
-    # Reduced from 60 bins for ~3x speedup with minimal quality loss
-    cqt = np.abs(librosa.cqt(y, sr=sr, n_bins=20, bins_per_octave=12))
-    band_size = cqt.shape[0] // NUM_LANES
+    # CQT sur 5 octaves pour couvrir toute la tessiture (piano, voix, etc.)
+    cqt = np.abs(librosa.cqt(y, sr=sr, n_bins=60, bins_per_octave=12))
 
-    # Pre-compute band indices to avoid repeated calculation
-    band_indices = []
-    for i in range(NUM_LANES):
-        start = i * band_size
-        end = (i + 1) * band_size if i < NUM_LANES - 1 else cqt.shape[0]
-        band_indices.append((start, end))
+    # 1re passe : bin CQT dominant à chaque onset (= hauteur de la note)
+    dominant_bins = []
+    for frame in onset_frames:
+        col = min(int(frame), cqt.shape[1] - 1)
+        dominant_bins.append(int(np.argmax(cqt[:, col])))
+    dominant_bins = np.array(dominant_bins)
+
+    # Frontières par quantiles : chaque lane couvre ~20 % de la distribution réelle.
+    # Evite les lanes "vides" quand les notes sont concentrées sur certains registres
+    # (ex: Rush E a beaucoup d'aigus et peu de graves → le mapping linéaire laisse
+    # des lanes sans notes).
+    boundaries = np.percentile(dominant_bins, [20, 40, 60, 80])
 
     last_time_per_lane = {i: -999.0 for i in range(NUM_LANES)}
     last_any_time = -999.0
     notes = []
 
-    for frame, time in zip(onset_frames, onset_times):
+    for i, (frame, time) in enumerate(zip(onset_frames, onset_times)):
         # Ignorer si trop proche d'une note quelconque
         if time - last_any_time < _MIN_GAP_GLOBAL:
             continue
 
-        # Sécurité : frame hors limites
-        col = min(int(frame), cqt.shape[1] - 1)
-        freq_content = cqt[:, col]
+        # Lane naturelle selon le pitch (quantile)
+        natural_lane = min(int(np.searchsorted(boundaries, dominant_bins[i])), NUM_LANES - 1)
 
-        # Vectorized band energy calculation
-        band_energies = np.array([
-            np.sum(freq_content[start:end])
-            for start, end in band_indices
-        ])
-
-        # Choisir la piste avec le plus d'énergie,
-        # en respectant l'écart minimum par piste
-        sorted_lanes = np.argsort(-band_energies)
+        # Si la lane naturelle est bloquée, essayer les lanes adjacentes plutôt
+        # que de perdre la note (utile pour les passages rapides comme Rush E).
         chosen = None
-        for lane in sorted_lanes:
-            if time - last_time_per_lane[lane] >= _MIN_GAP_LANE:
-                chosen = int(lane)
-                break
+        for offset in [0, 1, -1, 2, -2]:
+            candidate = natural_lane + offset
+            if 0 <= candidate < NUM_LANES:
+                if time - last_time_per_lane[candidate] >= _MIN_GAP_LANE:
+                    chosen = candidate
+                    break
 
         if chosen is None:
             continue
